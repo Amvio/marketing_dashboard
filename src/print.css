@@ -1,0 +1,106 @@
+/* Print styles */
+@media print {
+  /* Hide navbar */
+  .navbar-container,
+  .navbar-container * {
+    display: none !important;
+  }
+  
+  /* Adjust main content for printing */
+  .print-content {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    background-color: white !important;
+  }
+  
+  /* Adjust main application container */
+  body.print-mode .min-h-screen {
+    min-height: auto !important;
+    background-color: white !important;
+  }
+  
+  /* Reset positioning for print - but keep header sticky behavior */
+  body.print-mode * {
+    position: static !important;
+  }
+  
+  /* Keep header at top of printed page */
+  body.print-mode .sticky {
+    position: static !important;
+    top: 0 !important;
+    z-index: auto !important;
+    margin-bottom: 1rem !important;
+  }
+  
+  /* Ensure header is always at the top */
+  body.print-mode .sticky.top-16 {
+    position: static !important;
+    top: 0 !important;
+    margin-top: 0 !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+  }
+  
+  /* Prevent page breaks inside content sections */
+  .grid > div,
+  .bg-white {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Ensure proper scaling */
+  @page {
+    margin: 0.5in;
+    size: A4;
+  }
+  
+  /* Adjust font sizes for print */
+  body.print-mode {
+    font-size: 12pt;
+    line-height: 1.4;
+  }
+  
+  /* Ensure charts and images print properly */
+  svg, img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  
+  /* Adjust grid layouts for print */
+  .grid-cols-6 {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  
+  /* Ensure white backgrounds */
+  * {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  /* Keep some colors for charts and important elements */
+  .bg-primary-blue,
+  .bg-secondary-blue,
+  .bg-tertiary-blue,
+  .text-blue-600,
+  .text-green-600,
+  .text-red-600,
+  .text-purple-600 {
+    color: inherit !important;
+  }
+  
+  /* Ensure header content is visible and properly spaced */
+  body.print-mode .border-b {
+    border-bottom: 1px solid #e5e7eb !important;
+    padding-bottom: 1rem !important;
+    margin-bottom: 1rem !important;
+  }
+  
+  /* Make sure dropdowns and interactive elements show their current state */
+  body.print-mode select,
+  body.print-mode button {
+    border: 1px solid #d1d5db !important;
+    background-color: white !important;
+    color: black !important;
+  }
+}

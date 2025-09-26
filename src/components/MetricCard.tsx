@@ -1,0 +1,136 @@
+import React from 'react';
+import { useState } from 'react';
+import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
+import { generateDateRange } from '../utils/dateUtils';
+
+interface MetricCardProps {
+  title: string;
+  value: number;
+  previousValue: number;
+  chartData: number[];
+  color: string;
+  icon?: React.ReactNode;
+  startDate: Date;
+  endDate: Date;
+}
+
+export const MetricCard: React.FC<MetricCardProps> = ({ 
+  title, 
+  value, 
+  previousValue,
+  chartData, 
+  color,
+  icon,
+  startDate,
+  endDate
+}) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+
+  const maxValue = Math.max(...chartData);
+  const formatValue = (val: number) => {
+    if (val >= 1000) {
+      return (val / 1000).toFixed(val >= 10000 ? 0 : 1) + 'k';
+    }
+    return val.toString();
+  };
+
+  const calculatePercentageChange = () => {
+    if (previousValue === 0) return value > 0 ? 100 : 0;
+    return ((value - previousValue) / previousValue) * 100;
+  };
+
+  const percentageChange = calculatePercentageChange();
+  const isPositive = percentageChange >= 0;
+
+  const handleMouseEnter = (index: number, event: React.MouseEvent) => {
+    setHoveredIndex(index);
+    const rect = event.currentTarget.getBoundingClientRect();
+    setTooltipPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.top - 10
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredIndex(null);
+  };
+
+
+  // Generate dates for the chart data using the actual date range
+  const chartDates = generateDateRange(startDate, endDate).map(dateString => {
+    const [year, month, day] = dateString.split('-');
+    return `${day}.${month}`;
+  });
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200 relative">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-2">
+          <h3 className="text-sm font-medium text-gray-600">{title}</h3>
+        </div>
+        <div className="flex items-center space-x-2">
+          {icon && <div className="text-gray-400">{icon}</div>}
+          <BarChart3 className="w-4 h-4 text-gray-400" />
+        </div>
+      </div>
+      
+      <div className="mb-4">
+        <div className="flex items-baseline space-x-2 mb-1">
+          <span className="text-3xl font-bold text-gray-900">
+            {formatValue(value)}
+          </span>
+          <div className={`flex items-center space-x-1 text-xs font-medium ${
+            isPositive ? 'text-green-600' : 'text-red-600'
+          }`}>
+            {isPositive ? (
+              <TrendingUp className="w-3 h-3" />
+            ) : (
+              <TrendingDown className="w-3 h-3" />
+            )}
+            <span>
+              {isPositive ? '+' : ''}{percentageChange.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="h-16 flex items-end space-x-1">
+        {chartData.map((dataPoint, index) => (
+          <div
+            key={index}
+            onMouseEnter={(e) => handleMouseEnter(index, e)}
+            onMouseLeave={handleMouseLeave}
+            className={`w-full rounded-t-sm ${color} opacity-70 hover:opacity-100 transition-opacity`}
+            style={{
+              height: `${maxValue > 0 ? (dataPoint / maxValue) * 100 : 0}%`,
+              minHeight: dataPoint > 0 ? '4px' : '2px',
+              cursor: 'pointer'
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Tooltip */}
+      {hoveredIndex !== null && (
+        <div
+          className="fixed bg-white text-gray-900 text-xs rounded px-2 py-1 pointer-events-none z-50 shadow-lg border border-gray-200"
+          style={{
+            left: `${tooltipPosition.x}px`,
+            top: `${tooltipPosition.y}px`,
+            transform: 'translateX(-50%) translateY(-100%)',
+            backgroundColor: 'white'
+          }}
+        >
+          <div className="text-center">
+            <div className="font-medium">{chartDates[hoveredIndex]}</div>
+            <div>{formatValue(chartData[hoveredIndex])}</div>
+          </div>
+          <div 
+            className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"
+          />
+        </div>
+      )}
+    </div>
+  );
+};

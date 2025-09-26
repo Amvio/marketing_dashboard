@@ -1,0 +1,268 @@
+import React, { useState } from 'react';
+import { ChevronDown, ChevronRight, Database, ArrowLeft, Table, Eye, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+
+interface SupabaseTablesPageProps {
+  onBack: () => void;
+}
+
+interface TableData {
+  [key: string]: any;
+}
+
+export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack }) => {
+  const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
+  const [tableData, setTableData] = useState<Record<string, TableData[]>>({});
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'success' | 'error' | null>>({});
+
+  const refreshAllTables = async () => {
+    // Clear all existing data and status
+    setTableData({});
+    setConnectionStatus({});
+    setErrors({});
+    
+    // Close all expanded tables
+    setExpandedTables(new Set());
+  };
+
+  // List of all tables from your database schema
+  const tables = [
+    'ad_targeting',
+    'Kunden',
+    'ad_insights',
+    'Meta',
+    'ad_accounts',
+    'campaigns',
+    'ad_sets',
+    'ads',
+    'ad_creatives',
+    'customer_campaigns'
+  ];
+
+  const toggleTableExpansion = async (tableName: string) => {
+    const isExpanded = expandedTables.has(tableName);
+    
+    if (isExpanded) {
+      // Collapse the table
+      const newExpanded = new Set(expandedTables);
+      newExpanded.delete(tableName);
+      setExpandedTables(newExpanded);
+    } else {
+      // Expand the table and fetch data if not already fetched
+      const newExpanded = new Set(expandedTables);
+      newExpanded.add(tableName);
+      setExpandedTables(newExpanded);
+
+      if (!tableData[tableName]) {
+        setLoading(prev => ({ ...prev, [tableName]: true }));
+        setErrors(prev => ({ ...prev, [tableName]: '' }));
+
+        try {
+          console.log(`Fetching data for table: ${tableName}`);
+          const { data, error } = await supabase
+            .from(tableName)
+            .select('*')
+            .limit(5);
+
+          console.log(`Data for ${tableName}:`, data);
+          console.log(`Error for ${tableName}:`, error);
+
+          if (error) {
+            console.error(`Error fetching ${tableName}:`, error);
+            setErrors(prev => ({ ...prev, [tableName]: error.message }));
+            setConnectionStatus(prev => ({ ...prev, [tableName]: 'error' }));
+          } else {
+            setTableData(prev => ({ ...prev, [tableName]: data || [] }));
+            setConnectionStatus(prev => ({ ...prev, [tableName]: 'success' }));
+          }
+        } catch (err) {
+          console.error(`Exception fetching ${tableName}:`, err);
+          setErrors(prev => ({ 
+            ...prev, 
+            [tableName]: err instanceof Error ? err.message : 'Unknown error' 
+          }));
+          setConnectionStatus(prev => ({ ...prev, [tableName]: 'error' }));
+        } finally {
+          setLoading(prev => ({ ...prev, [tableName]: false }));
+        }
+      }
+    }
+  };
+
+  const truncateText = (text: any, maxLength: number = 50): string => {
+    if (text === null || text === undefined) return 'NULL';
+    const str = String(text);
+    return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
+  };
+
+  const formatValue = (value: any): string => {
+    if (value === null || value === undefined) return 'NULL';
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center">
+          <button
+            onClick={onBack}
+            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span>Zurück zum Dashboard</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-6">
+        <div className="mb-6">
+          <div className="flex items-center space-x-3">
+            <Database className="w-8 h-8 text-blue-600" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Supabase Datenbanken</h1>
+              <p className="text-gray-600">Übersicht aller Tabellen und deren Inhalte</p>
+            </div>
+            <div className="ml-auto">
+              <button
+                onClick={refreshAllTables}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Aktualisieren</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Alle Tabellen</h2>
+            <p className="text-sm text-gray-600 mt-1">Klicken Sie auf den Pfeil, um die ersten 5 Einträge anzuzeigen</p>
+          </div>
+
+          <div className="divide-y divide-gray-200">
+            {tables.map((tableName) => (
+              <div key={tableName}>
+                {/* Table Header Row */}
+                <div className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={() => toggleTableExpansion(tableName)}
+                        className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 transition-colors"
+                      >
+                        {expandedTables.has(tableName) ? (
+                          <ChevronDown className="w-5 h-5" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5" />
+                        )}
+                        <Table className="w-5 h-5 text-blue-600" />
+                        <span className="font-medium text-lg">{tableName}</span>
+                      </button>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {loading[tableName] && (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      )}
+                      {connectionStatus[tableName] === 'success' && (
+                        <div className="flex items-center space-x-1">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span className="text-xs text-green-600 font-medium">Verbunden</span>
+                        </div>
+                      )}
+                      {connectionStatus[tableName] === 'error' && (
+                        <div className="flex items-center space-x-1">
+                          <XCircle className="w-4 h-4 text-red-600" />
+                          <span className="text-xs text-red-600 font-medium">Fehler</span>
+                        </div>
+                      )}
+                      {!connectionStatus[tableName] && !loading[tableName] && (
+                        <Eye className="w-4 h-4 text-gray-400" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded Content */}
+                {expandedTables.has(tableName) && (
+                  <div className="px-6 pb-6 bg-gray-50">
+                    {loading[tableName] ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <span className="ml-3 text-gray-600">Lade Daten...</span>
+                      </div>
+                    ) : errors[tableName] ? (
+                      <div className="py-4 px-4 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="text-red-800">
+                          <strong>Fehler beim Laden der Daten:</strong> {errors[tableName]}
+                        </div>
+                      </div>
+                    ) : tableData[tableName] && tableData[tableName].length > 0 ? (
+                      <div className="mt-4">
+                        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead className="bg-gray-100">
+                                <tr>
+                                  {Object.keys(tableData[tableName][0]).map((column) => (
+                                    <th key={column} className="text-left py-3 px-4 font-medium text-gray-700 text-sm">
+                                      {column}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {tableData[tableName].map((row, index) => (
+                                  <tr key={index} className="hover:bg-gray-50">
+                                    {Object.entries(row).map(([column, value]) => (
+                                      <td key={column} className="py-3 px-4 text-sm text-gray-900">
+                                        <span title={formatValue(value)}>
+                                          {truncateText(value)}
+                                        </span>
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-xs text-gray-500">
+                          Zeigt die ersten 5 Einträge von {tableName}
+                        </div>
+                      </div>
+                    ) : tableData[tableName] && tableData[tableName].length === 0 ? (
+                      <div className="py-8 text-center text-gray-500">
+                        <Table className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <p>Keine Daten in dieser Tabelle gefunden</p>
+                        <p className="text-sm">Die Tabelle "{tableName}" ist leer</p>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Summary Card */}
+        <div className="mt-6 bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Database className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-600">Gesamt Tabellen</p>
+              <p className="text-2xl font-bold text-gray-900">{tables.length}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
