@@ -148,7 +148,7 @@ exports.handler = async (event, context) => {
         // Transform Meta API data to match Supabase schema
         const campaignData = {
           id: String(campaign.id),
-          ad_account_id: String(adAccount.id),
+          ad_account_id: String(campaign.account_id),
           name: campaign.name,
           status: campaign.status,
           objective: campaign.objective,
