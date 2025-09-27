@@ -3,16 +3,15 @@
   publish = "dist"
   functions = "netlify/functions"
 
-[functions]
-  node_bundler = "esbuild"
-
 [[functions]]
   function = "get_ad_accounts"
   schedule = "0 5 * * *"
+  node_bundler = "esbuild"
 
 [[functions]]
   function = "get_campaigns"
   schedule = "15 5 * * *"
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"
