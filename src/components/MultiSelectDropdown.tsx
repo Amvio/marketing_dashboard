@@ -11,7 +11,6 @@ interface MultiSelectDropdownProps {
   selectedIds: string[];
   onSelectionChange: (selectedIds: string[]) => void;
   placeholder: string;
-  icon?: React.ReactNode;
   className?: string;
 }
 
@@ -20,8 +19,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
   selectedIds,
   onSelectionChange,
   placeholder,
-  icon,
-  className = "w-48"
+  className = "w-72"
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -70,12 +68,11 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 ${className}`}
+        className={`relative appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 ${className}`}
         style={{ backgroundColor: 'white' }}
       >
-        {icon && <div className="flex-shrink-0">{icon}</div>}
         <span className="text-sm font-medium truncate">{getDisplayText()}</span>
-        <ChevronDown className="w-4 h-4 text-gray-500 ml-auto flex-shrink-0" />
+        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 flex-shrink-0" />
       </button>
 
       {isOpen && (

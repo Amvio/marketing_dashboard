@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Mail, Phone, MapPin, Globe, Calendar, RefreshCw, Database, Edit3, X } from 'lucide-react';
+import { Building2, Users, Mail, Phone, MapPin, Globe, Calendar, RefreshCw, Database, CreditCard as Edit3, X } from 'lucide-react';
 import { supabase, Customer as SupabaseCustomer } from '../lib/supabase';
 import { SimpleHeader } from './SimpleHeader';
 import { AddCustomerForm, CustomerFormData } from './AddCustomerForm';
 
 interface SupabaseCustomersPageProps {
   onBack: () => void;
+  addConsoleMessage?: (message: string) => void;
 }
 
 interface CustomerCampaign {
@@ -13,7 +14,7 @@ interface CustomerCampaign {
   campaign_id: number;
 }
 
-export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ onBack }) => {
+export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ onBack, addConsoleMessage }) => {
   const [customers, setCustomers] = useState<SupabaseCustomer[]>([]);
   const [customerCampaigns, setCustomerCampaigns] = useState<CustomerCampaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,8 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
     setCampaignLoading(true);
     setCampaignError(null);
     
+    addConsoleMessage?.('Fetching campaigns with ad_account relationships...');
+    
     try {
       console.log('Fetching campaigns with ad_account relationships...');
       const { data: campaignData, error: campaignError } = await supabase
@@ -49,6 +52,7 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
       if (campaignError) {
         console.error('Error fetching campaigns:', campaignError);
         setCampaignError(campaignError.message);
+        addConsoleMessage?.(`Error fetching campaigns: ${campaignError.message}`);
       } else {
         // Create relationships by matching ad_account_id with customer_id
         // This assumes ad_account_id corresponds to customer_id
@@ -67,10 +71,12 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
         // const orphanedCampaigns = relationships.filter(rel => rel.customer_name.startsWith('Unbekannter Kunde'));
         
         setCustomerCampaigns(relationships);
+        addConsoleMessage?.(`Successfully fetched ${relationships.length} campaign relationships`);
       }
     } catch (err) {
       console.error('Exception fetching campaigns:', err);
       setCampaignError(err instanceof Error ? err.message : 'Unknown error');
+      addConsoleMessage?.(`Exception fetching campaigns: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setCampaignLoading(false);
     }
@@ -79,6 +85,8 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
   const fetchCustomers = async () => {
     setLoading(true);
     setError(null);
+    
+    addConsoleMessage?.('Fetching customers from Kunden table...');
     
     try {
       console.log('Fetching customers from Kunden table...');
@@ -93,12 +101,15 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
       if (error) {
         console.error('Error fetching customers:', error);
         setError(error.message);
+        addConsoleMessage?.(`Error fetching customers: ${error.message}`);
       } else {
         setCustomers(data || []);
+        addConsoleMessage?.(`Successfully fetched ${(data || []).length} customers`);
       }
     } catch (err) {
       console.error('Exception fetching customers:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
+      addConsoleMessage?.(`Exception fetching customers: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -123,6 +134,8 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
   const handleAddCustomer = async (customerData: CustomerFormData, customerId?: number) => {
     setIsSubmitting(true);
     
+    addConsoleMessage?.(customerId ? 'Updating customer...' : 'Adding new customer...');
+    
     try {
       console.log(customerId ? 'Updating customer:' : 'Adding new customer:', customerData);
       
@@ -143,6 +156,7 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
         if (uploadError) {
           console.error('Error uploading logo:', uploadError);
           setError(`Fehler beim Hochladen des Logos: ${uploadError.message}`);
+          addConsoleMessage?.(`Error uploading logo: ${uploadError.message}`);
           return;
         }
         
@@ -153,6 +167,7 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
         
         logoUrl = urlData.publicUrl;
         console.log('Logo uploaded successfully:', logoUrl);
+        addConsoleMessage?.(`Logo uploaded successfully: ${logoUrl}`);
       }
       
       // Prepare customer data without logoFile
@@ -188,8 +203,10 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
       if (error) {
         console.error(customerId ? 'Error updating customer:' : 'Error adding customer:', error);
         setError(`Fehler beim ${customerId ? 'Aktualisieren' : 'Hinzufügen'} des Kunden: ${error.message}`);
+        addConsoleMessage?.(`Error ${customerId ? 'updating' : 'adding'} customer: ${error.message}`);
       } else {
         console.log(customerId ? 'Customer updated successfully:' : 'Customer added successfully:', data);
+        addConsoleMessage?.(customerId ? 'Customer updated successfully' : 'Customer added successfully');
         setShowAddForm(false);
         setShowEditForm(false);
         setEditingCustomer(null);
@@ -201,6 +218,7 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
     } catch (err) {
       console.error('Exception adding customer:', err);
       setError(err instanceof Error ? err.message : `Unbekannter Fehler beim ${customerId ? 'Aktualisieren' : 'Hinzufügen'}`);
+      addConsoleMessage?.(`Exception ${customerId ? 'updating' : 'adding'} customer: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -229,6 +247,8 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
     
     setIsDeleting(true);
     
+    addConsoleMessage?.(`Deleting customer: ${customerToDelete.customer_id}`);
+    
     try {
       console.log('Deleting customer:', customerToDelete.customer_id);
       
@@ -240,8 +260,10 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
       if (error) {
         console.error('Error deleting customer:', error);
         setError(`Fehler beim Löschen des Kunden: ${error.message}`);
+        addConsoleMessage?.(`Error deleting customer: ${error.message}`);
       } else {
         console.log('Customer deleted successfully');
+        addConsoleMessage?.('Customer deleted successfully');
         setShowDeleteConfirm(false);
         setCustomerToDelete(null);
         // Refresh the customer list
@@ -252,6 +274,7 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
     } catch (err) {
       console.error('Exception deleting customer:', err);
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler beim Löschen');
+      addConsoleMessage?.(`Exception deleting customer: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsDeleting(false);
     }

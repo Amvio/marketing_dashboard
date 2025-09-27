@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Home, Settings, ChevronDown, FileDown } from 'lucide-react';
+import { Home, Settings, ChevronDown, FileDown, Terminal } from 'lucide-react';
+import { Customer } from '../types/dashboard';
 
 interface NavbarProps {
   onNavigateToDashboard?: () => void;
@@ -8,6 +9,10 @@ interface NavbarProps {
   onNavigateToSupabaseCustomers?: () => void;
   onNavigateToSupabaseCampaigns?: () => void;
   onExport?: () => void;
+  selectedCustomer?: Customer | null;
+  currentPage?: 'dashboard' | 'supabase-tables' | 'supabase-customers' | 'supabase-campaigns';
+  consoleMessages?: string[];
+  onClearConsole?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ 
@@ -16,9 +21,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateToSupabaseTables,
   onNavigateToSupabaseCustomers,
   onNavigateToSupabaseCampaigns,
-  onExport
+  onExport,
+  selectedCustomer,
+  currentPage,
+  consoleMessages = [],
+  onClearConsole
 }) => {
-  const [openDropdown, setOpenDropdown] = useState<'menu' | 'settings' | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<'menu' | 'settings' | 'console' | null>(null);
 
   const handleDashboardClick = () => {
     if (onNavigateToDashboard) {
@@ -65,6 +74,29 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Customer Logo Box - Only show on dashboard */}
+        {currentPage === 'dashboard' && selectedCustomer && (
+          <div className="flex items-center justify-center flex-1">
+            <div className="flex items-center justify-center h-[42px] py-2">
+              {selectedCustomer.logo_url ? (
+                <img 
+                  src={selectedCustomer.logo_url} 
+                  alt={`${selectedCustomer.customer_name || selectedCustomer.customer_company_name} Logo`}
+                  className="h-full w-auto object-contain max-w-32 max-h-[42px]"
+                />
+              ) : (
+                <div className="h-full aspect-square bg-gray-200 rounded flex items-center justify-center max-h-[42px]">
+                  <span className="text-xl font-medium text-gray-500">
+                    {(selectedCustomer.customer_name || selectedCustomer.customer_company_name || 'K')
+                      .charAt(0)
+                      .toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center space-x-3">
           <div className="relative">
@@ -124,6 +156,47 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </div>
                     <span className="text-gray-900">Berichte</span>
                   </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setOpenDropdown(openDropdown === 'console' ? null : 'console')}
+              className="flex items-center space-x-2 border-2 border-primary-blue hover:border-secondary-blue text-primary-blue hover:text-secondary-blue bg-transparent px-4 py-2 rounded-lg transition-colors duration-200"
+            >
+              <Terminal className="w-4 h-4" />
+              <span className="text-sm font-medium">Console</span>
+              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${openDropdown === 'console' ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {openDropdown === 'console' && (
+              <div 
+                className="fixed top-16 left-0 w-screen max-h-64 bg-black text-green-400 font-mono text-xs shadow-xl overflow-hidden z-[10002] border border-gray-600"
+                style={{ backgroundColor: 'black' }}
+              >
+                <div className="bg-gray-800 px-3 py-2 border-b border-gray-600">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-semibold">Debug Console</span>
+                    <button
+                      onClick={onClearConsole}
+                      className="text-gray-400 hover:text-white text-xs"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="p-3 overflow-y-auto max-h-48" style={{ backgroundColor: 'black' }}>
+                  {consoleMessages.length === 0 ? (
+                    <div className="text-gray-500" style={{ color: '#6b7280' }}>No messages...</div>
+                  ) : (
+                    consoleMessages.map((message, index) => (
+                      <div key={index} className="mb-1 break-words text-green-400" style={{ color: '#4ade80' }}>
+                        {message}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

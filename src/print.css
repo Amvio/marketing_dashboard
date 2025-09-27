@@ -21,7 +21,7 @@
   }
   
   /* Reset positioning for print - but keep header sticky behavior */
-  body.print-mode * {
+  body.print-mode * {supabase
     position: static !important;
   }
   

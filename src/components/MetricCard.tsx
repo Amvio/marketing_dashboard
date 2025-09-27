@@ -1,6 +1,6 @@
 import React from 'react';
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import { generateDateRange } from '../utils/dateUtils';
 
 interface MetricCardProps {
@@ -64,18 +64,17 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   });
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200 relative">
+    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200 relative w-full h-full min-h-[200px] flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          <h3 className="text-sm font-medium text-gray-600">{title}</h3>
+          <h3 className="text-sm font-medium text-gray-600 truncate flex-1 min-w-0">{title}</h3>
         </div>
         <div className="flex items-center space-x-2">
           {icon && <div className="text-gray-400">{icon}</div>}
-          <BarChart3 className="w-4 h-4 text-gray-400" />
         </div>
       </div>
       
-      <div className="mb-4">
+      <div className="mb-4 flex-1">
         <div className="flex items-baseline space-x-2 mb-1">
           <span className="text-3xl font-bold text-gray-900">
             {formatValue(value)}
@@ -95,7 +94,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         </div>
       </div>
       
-      <div className="h-16 flex items-end space-x-1">
+      <div className="h-16 flex items-end space-x-1 mt-auto">
         {chartData.map((dataPoint, index) => (
           <div
             key={index}

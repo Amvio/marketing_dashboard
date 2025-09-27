@@ -77,10 +77,13 @@ export interface Ad {
 
 export interface Task {
   id: string;
+  customer_id: number;
   title: string;
   assignee: string;
   completed: boolean;
-  createdAt: Date;
+  created_at: string;
+  due_date?: string | null;
+  description?: string | null;
 }
 
 export interface AdInsight {

@@ -31,6 +31,7 @@ function App() {
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>([]);
   const [selectedAdIds, setSelectedAdIds] = useState<string[]>([]);
   const [selectedAdsetIds, setSelectedAdsetIds] = useState<string[]>([]);
+  const [consoleMessages, setConsoleMessages] = useState<string[]>([]);
   
   // Supabase data states
   const [supabaseCustomers, setSupabaseCustomers] = useState<Customer[]>([]);
@@ -63,6 +64,18 @@ function App() {
   
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Function to add console messages
+  const addConsoleMessage = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const formattedMessage = `[${timestamp}] ${message}`;
+    setConsoleMessages(prev => [...prev, formattedMessage]); // Keep all messages
+  };
+
+  const clearConsole = () => {
+    setConsoleMessages([]);
+  };
+
   const [tasks, setTasks] = useState<Task[]>([
     {
       id: '1',
@@ -170,9 +183,62 @@ function App() {
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-tertiary-blue',
       icon: <TrendingUp className="w-4 h-4" />
+    },
+    {
+      id: 'leads',
+      title: 'Leads',
+      value: 0,
+      previousValue: 0,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-green-600',
+      icon: <UserPlus className="w-4 h-4" />
+    },
+    {
+      id: 'qualified-leads',
+      title: 'Qualifizierte Leads',
+      value: 0,
+      previousValue: 0,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-green-700',
+      icon: <Users className="w-4 h-4" />
+    },
+    {
+      id: 'cost-per-lead',
+      title: 'Kosten pro Lead',
+      value: 0,
+      previousValue: 0,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-green-800',
+      icon: <DollarSign className="w-4 h-4" />
+    },
+    {
+      id: 'conversion-rate',
+      title: 'Conversion Rate (%)',
+      value: 0,
+      previousValue: 0,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-green-600',
+      icon: <TrendingUp className="w-4 h-4" />
+    },
+    {
+      id: 'lead-quality',
+      title: 'Lead Qualität',
+      value: 0,
+      previousValue: 0,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-green-700',
+      icon: <Target className="w-4 h-4" />
+    },
+    {
+      id: 'follow-up-rate',
+      title: 'Follow-up Rate (%)',
+      value: 0,
+      previousValue: 0,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-green-800',
+      icon: <MessageSquare className="w-4 h-4" />
     }
   ]);
-
   // Fetch customers from Supabase
   React.useEffect(() => {
     const fetchCustomers = async () => {
@@ -451,6 +517,60 @@ function App() {
         chartData: dailyChartData.map(d => Math.round(d.cpm * 100) / 100),
         color: 'bg-tertiary-blue',
         icon: <TrendingUp className="w-4 h-4" />
+       },
+       {
+         id: 'leads',
+         title: 'Leads',
+         value: 0,
+         previousValue: 0,
+         chartData: updatedDailyDateRange.map(() => 0),
+         color: 'bg-green-600',
+         icon: <UserPlus className="w-4 h-4" />
+       },
+       {
+         id: 'qualified-leads',
+         title: 'Qualifizierte Leads',
+         value: 0,
+         previousValue: 0,
+         chartData: updatedDailyDateRange.map(() => 0),
+         color: 'bg-green-700',
+         icon: <Users className="w-4 h-4" />
+       },
+       {
+         id: 'cost-per-lead',
+         title: 'Kosten pro Lead',
+         value: 0,
+         previousValue: 0,
+         chartData: updatedDailyDateRange.map(() => 0),
+         color: 'bg-green-800',
+         icon: <DollarSign className="w-4 h-4" />
+       },
+       {
+         id: 'conversion-rate',
+         title: 'Conversion Rate (%)',
+         value: 0,
+         previousValue: 0,
+         chartData: updatedDailyDateRange.map(() => 0),
+         color: 'bg-green-600',
+         icon: <TrendingUp className="w-4 h-4" />
+       },
+       {
+         id: 'lead-quality',
+         title: 'Lead Qualität',
+         value: 0,
+         previousValue: 0,
+         chartData: updatedDailyDateRange.map(() => 0),
+         color: 'bg-green-700',
+         icon: <Target className="w-4 h-4" />
+       },
+       {
+         id: 'follow-up-rate',
+         title: 'Follow-up Rate (%)',
+         value: 0,
+         previousValue: 0,
+         chartData: updatedDailyDateRange.map(() => 0),
+         color: 'bg-green-800',
+         icon: <MessageSquare className="w-4 h-4" />
       }
     ]);
   }, [selectedCustomer, selectedCampaignIds, selectedAdsetIds, selectedAdIds, startDate, endDate, adInsights, supabaseCampaigns]);
@@ -643,8 +763,15 @@ function App() {
           onNavigateToDashboard={handleNavigateToDashboard}
           onNavigateToCustomers={handleNavigateToCustomers}
           onNavigateToSupabaseTables={handleNavigateToSupabaseTables}
+          selectedCustomer={selectedCustomer}
+          currentPage={currentPage}
+          consoleMessages={consoleMessages}
+          onClearConsole={clearConsole}
         />
-        <SupabaseTablesPage onBack={handleBackToDashboard} />
+        <SupabaseTablesPage 
+          onBack={handleBackToDashboard} 
+          addConsoleMessage={addConsoleMessage}
+        />
       </>
     );
   }
@@ -660,8 +787,15 @@ function App() {
           onNavigateToSupabaseCustomers={handleNavigateToSupabaseCustomers}
           onNavigateToSupabaseCampaigns={handleNavigateToSupabaseCampaigns}
           onExport={handlePrintDashboard}
+          selectedCustomer={selectedCustomer}
+          currentPage={currentPage}
+          consoleMessages={consoleMessages}
+          onClearConsole={clearConsole}
         />
-        <SupabaseCustomersPage onBack={handleBackToDashboard} />
+        <SupabaseCustomersPage 
+          onBack={handleBackToDashboard} 
+          addConsoleMessage={addConsoleMessage}
+        />
       </>
     );
   }
@@ -677,8 +811,15 @@ function App() {
           onNavigateToSupabaseCustomers={handleNavigateToSupabaseCustomers}
           onNavigateToSupabaseCampaigns={handleNavigateToSupabaseCampaigns}
           onExport={handlePrintDashboard}
+          selectedCustomer={selectedCustomer}
+          currentPage={currentPage}
+          consoleMessages={consoleMessages}
+          onClearConsole={clearConsole}
         />
-        <SupabaseCustomerCampaignsPage onBack={handleBackToDashboard} />
+        <SupabaseCustomerCampaignsPage 
+          onBack={handleBackToDashboard} 
+          addConsoleMessage={addConsoleMessage}
+        />
       </>
     );
   }
@@ -692,6 +833,10 @@ function App() {
         onNavigateToSupabaseCustomers={handleNavigateToSupabaseCustomers}
         onNavigateToSupabaseCampaigns={handleNavigateToSupabaseCampaigns}
         onExport={handlePrintDashboard}
+        selectedCustomer={selectedCustomer}
+        currentPage={currentPage}
+        consoleMessages={consoleMessages}
+        onClearConsole={clearConsole}
       />
       <Header
         customers={supabaseCustomers}
@@ -714,7 +859,7 @@ function App() {
       />
       
       <div className="p-6 space-y-6">
-        {/* Metrics Cards */}
+        {/* All 12 Metrics Cards - Unified Drag & Drop */}
         <div className="grid grid-cols-6 gap-6">
           {metricsData.map((metric, index) => (
             <div
@@ -787,10 +932,7 @@ function App() {
         {/* Task Manager */}
         <div className="grid grid-cols-1 gap-6">
           <TaskManager
-            tasks={tasks}
-            onAddTask={handleAddTask}
-            onToggleTask={handleToggleTask}
-            onDeleteTask={handleDeleteTask}
+            selectedCustomerId={selectedCustomer.customer_id}
           />
         </div>
         

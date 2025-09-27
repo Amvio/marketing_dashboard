@@ -1,47 +1,139 @@
-import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Database, ArrowLeft, Table, Eye, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronDown, ChevronRight, Database, ArrowLeft, Table, Eye, CheckCircle, XCircle, RefreshCw, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface SupabaseTablesPageProps {
   onBack: () => void;
+  addConsoleMessage?: (message: string) => void;
 }
 
 interface TableData {
   [key: string]: any;
 }
 
-export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack }) => {
+export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, addConsoleMessage }) => {
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
   const [tableData, setTableData] = useState<Record<string, TableData[]>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'success' | 'error' | null>>({});
 
+  // Handle Abfrage button click for ad_accounts
+  const handleAbfrageClick = async (tableName: string) => {
+    if (tableName === 'ad_accounts') {
+      addConsoleMessage?.(`Calling Netlify function for ${tableName}...`);
+      try {
+        console.log('Calling Netlify function for ad_accounts...');
+        const response = await fetch('/api/get_ad_accounts?table=ad_accounts', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Netlify function error:', errorText);
+          addConsoleMessage?.(`Netlify function error: ${errorText}`);
+          return;
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const responseText = await response.text();
+          console.error('Non-JSON response:', responseText);
+          addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+          return;
+        }
+
+        const data = await response.json();
+        console.log('Netlify function response:', data);
+        addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+      } catch (error) {
+        console.error('Error calling Netlify function:', error);
+        addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  };
   const refreshAllTables = async () => {
     // Clear all existing data and status
     setTableData({});
     setConnectionStatus({});
     setErrors({});
     
-    // Close all expanded tables
-    setExpandedTables(new Set());
+    // Reload status for all tables
+    const promises = tables.map(tableName => fetchTableData(tableName));
+    await Promise.all(promises);
   };
 
   // List of all tables from your database schema
   const tables = [
     'ad_targeting',
-    'Kunden',
     'ad_insights',
-    'Meta',
-    'ad_accounts',
+    'Kunden',
+    'customer_tasks',
+    'dashboard_users',
     'campaigns',
+    'ad_accounts',
     'ad_sets',
     'ads',
-    'ad_creatives',
-    'customer_campaigns'
+    'ad_creatives'
   ];
 
-  const toggleTableExpansion = async (tableName: string) => {
+  // Dedicated function to fetch table data
+  const fetchTableData = async (tableName: string) => {
+    setLoading(prev => ({ ...prev, [tableName]: true }));
+    setErrors(prev => ({ ...prev, [tableName]: '' }));
+    
+    addConsoleMessage?.(`Fetching data for table: ${tableName}`);
+
+    try {
+      console.log(`Fetching data for table: ${tableName}`);
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .limit(5);
+
+      console.log(`Data for ${tableName}:`, data);
+      console.log(`Error for ${tableName}:`, error);
+
+      if (error) {
+        console.error(`Error fetching ${tableName}:`, error);
+        setErrors(prev => ({ ...prev, [tableName]: error.message }));
+        setConnectionStatus(prev => ({ ...prev, [tableName]: 'error' }));
+        addConsoleMessage?.(`Error fetching ${tableName}: ${error.message}`);
+      } else {
+        setTableData(prev => ({ ...prev, [tableName]: data || [] }));
+        setConnectionStatus(prev => ({ ...prev, [tableName]: 'success' }));
+        addConsoleMessage?.(`Successfully fetched ${(data || []).length} records from ${tableName}`);
+      }
+    } catch (err) {
+      console.error(`Exception fetching ${tableName}:`, err);
+      setErrors(prev => ({ 
+        ...prev, 
+        [tableName]: err instanceof Error ? err.message : 'Unknown error' 
+      }));
+      setConnectionStatus(prev => ({ ...prev, [tableName]: 'error' }));
+      addConsoleMessage?.(`Exception fetching ${tableName}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setLoading(prev => ({ ...prev, [tableName]: false }));
+    }
+  };
+
+  // Initial data loading on component mount
+  useEffect(() => {
+    const loadAllTableStatuses = async () => {
+      addConsoleMessage?.('Loading all table statuses...');
+      // Load status for all tables immediately
+      const promises = tables.map(tableName => fetchTableData(tableName));
+      await Promise.all(promises);
+      addConsoleMessage?.('Finished loading all table statuses');
+    };
+
+    loadAllTableStatuses();
+  }, []);
+
+  const toggleTableExpansion = (tableName: string) => {
     const isExpanded = expandedTables.has(tableName);
     
     if (isExpanded) {
@@ -54,40 +146,6 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack }
       const newExpanded = new Set(expandedTables);
       newExpanded.add(tableName);
       setExpandedTables(newExpanded);
-
-      if (!tableData[tableName]) {
-        setLoading(prev => ({ ...prev, [tableName]: true }));
-        setErrors(prev => ({ ...prev, [tableName]: '' }));
-
-        try {
-          console.log(`Fetching data for table: ${tableName}`);
-          const { data, error } = await supabase
-            .from(tableName)
-            .select('*')
-            .limit(5);
-
-          console.log(`Data for ${tableName}:`, data);
-          console.log(`Error for ${tableName}:`, error);
-
-          if (error) {
-            console.error(`Error fetching ${tableName}:`, error);
-            setErrors(prev => ({ ...prev, [tableName]: error.message }));
-            setConnectionStatus(prev => ({ ...prev, [tableName]: 'error' }));
-          } else {
-            setTableData(prev => ({ ...prev, [tableName]: data || [] }));
-            setConnectionStatus(prev => ({ ...prev, [tableName]: 'success' }));
-          }
-        } catch (err) {
-          console.error(`Exception fetching ${tableName}:`, err);
-          setErrors(prev => ({ 
-            ...prev, 
-            [tableName]: err instanceof Error ? err.message : 'Unknown error' 
-          }));
-          setConnectionStatus(prev => ({ ...prev, [tableName]: 'error' }));
-        } finally {
-          setLoading(prev => ({ ...prev, [tableName]: false }));
-        }
-      }
     }
   };
 
@@ -173,6 +231,14 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack }
                         <div className="flex items-center space-x-1">
                           <CheckCircle className="w-4 h-4 text-green-600" />
                           <span className="text-xs text-green-600 font-medium">Verbunden</span>
+                          <button
+                            onClick={() => handleAbfrageClick(tableName)}
+                            className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150"
+                            title="Abfrage ausführen"
+                          >
+                            <Search className="w-3 h-3" />
+                            <span>Abfrage</span>
+                          </button>
                         </div>
                       )}
                       {connectionStatus[tableName] === 'error' && (

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Users, RefreshCw, Database, Edit3, X, Plus, ChevronDown, Check } from 'lucide-react';
+import { Target, Users, RefreshCw, Database, CreditCard as Edit3, X, Plus, ChevronDown, Check } from 'lucide-react';
 import { supabase, Customer as SupabaseCustomer } from '../lib/supabase';
 import { SimpleHeader } from './SimpleHeader';
 
 interface SupabaseCustomerCampaignsPageProps {
   onBack: () => void;
+  addConsoleMessage?: (message: string) => void;
 }
 
 interface CustomerCampaign {
@@ -20,21 +21,13 @@ interface CustomerCampaign {
   created_time: string | null;
 }
 
-export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPageProps> = ({ onBack }) => {
+export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPageProps> = ({ onBack, addConsoleMessage }) => {
   const [campaigns, setCampaigns] = useState<CustomerCampaign[]>([]);
   const [customers, setCustomers] = useState<SupabaseCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [customersLoading, setCustomersLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDropdowns, setOpenDropdowns] = useState<Set<number>>(new Set());
-  const [consoleMessages, setConsoleMessages] = useState<string[]>([]);
-
-  // Function to add console messages
-  const addConsoleMessage = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const formattedMessage = `[${timestamp}] ${message}`;
-    setConsoleMessages(prev => [...prev.slice(-9), formattedMessage]); // Keep last 10 messages
-  };
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -55,15 +48,15 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
       if (error) {
         console.error('Error fetching campaigns:', error);
         setError(error.message);
-        addConsoleMessage(`Error fetching campaigns: ${error.message}`);
+        addConsoleMessage?.(`Error fetching campaigns: ${error.message}`);
       } else {
         setCampaigns(data || []);
-        addConsoleMessage(`Successfully fetched ${(data || []).length} campaigns`);
+        addConsoleMessage?.(`Successfully fetched ${(data || []).length} campaigns`);
       }
     } catch (err) {
       console.error('Exception fetching campaigns:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
-      addConsoleMessage(`Exception fetching campaigns: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      addConsoleMessage?.(`Exception fetching campaigns: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -120,7 +113,7 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
 
   const handleCustomerAssignment = async (campaignId: number, customerId: number) => {
     console.log('Customer assignment clicked:', { campaignId, customerId });
-    addConsoleMessage(`Customer assignment clicked: Campaign ${campaignId}, Customer ${customerId}`);
+    addConsoleMessage?.(`Customer assignment clicked: Campaign ${campaignId}, Customer ${customerId}`);
     
     // Close dropdown
     setOpenDropdowns(prev => {
@@ -136,7 +129,7 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
         table: 'campaigns',
         column: 'customer_id'
       });
-      addConsoleMessage(`Updating campaign ${campaignId} with customer ${customerId === 0 ? 'null' : customerId}`);
+      addConsoleMessage?.(`Updating campaign ${campaignId} with customer ${customerId === 0 ? 'null' : customerId}`);
       
       // Update the campaign in Supabase
       const { error } = await supabase
@@ -149,12 +142,12 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
       if (error) {
         console.error('Error updating campaign customer assignment:', error);
         setError(`Fehler beim Zuweisen des Kunden: ${error.message}`);
-        addConsoleMessage(`ERROR: Failed to update campaign: ${error.message}`);
+        addConsoleMessage?.(`ERROR: Failed to update campaign: ${error.message}`);
         return;
       }
 
       console.log('Successfully updated campaign customer_id in database');
-      addConsoleMessage(`SUCCESS: Updated campaign ${campaignId} customer_id in database`);
+      addConsoleMessage?.(`SUCCESS: Updated campaign ${campaignId} customer_id in database`);
       
       // Update local state after successful database update
       setCampaigns(prev => prev.map(campaign => 
@@ -164,7 +157,7 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
       ));
 
       console.log('Local state updated successfully');
-      addConsoleMessage('Local state updated successfully');
+      addConsoleMessage?.('Local state updated successfully');
       
       // Clear any previous errors
       setError(null);
@@ -175,7 +168,7 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
     } catch (err) {
       console.error('Exception updating customer assignment:', err);
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler beim Zuweisen');
-      addConsoleMessage(`EXCEPTION: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      addConsoleMessage?.(`EXCEPTION: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -220,7 +213,7 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
   
   // Add render info to visible console
   React.useEffect(() => {
-    addConsoleMessage(`Component render: ${campaigns.length} campaigns, ${customers.length} customers, loading: ${loading}`);
+    addConsoleMessage?.(`Component render: ${campaigns.length} campaigns, ${customers.length} customers, loading: ${loading}`);
   }, [campaigns.length, customers.length, loading]);
 
   return (
@@ -347,23 +340,20 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
                                 <div className="p-2">
                                   <button
                                     onClick={() => handleCustomerAssignment(campaign.id, 0)}
-                                    className="w-full text-left px-3 py-2 text-sm text-gray-900 hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                                    className="w-full text-left px-3 py-2 text-sm text-gray-900 hover:bg-gray-100 rounded flex items-center justify-between transition-colors duration-150"
                                   >
+                                    <span className="text-gray-500 italic">Keinen Kunden zuweisen</span>
                                     <div className="w-4 h-4 flex items-center justify-center">
                                       {!campaign.customer_id && <Check className="w-3 h-3 text-blue-600" />}
                                     </div>
-                                    <span className="text-gray-500 italic">Keinen Kunden zuweisen</span>
                                   </button>
                                   <div className="border-t border-gray-100 my-1"></div>
                                   {customers.map((customer) => (
                                     <button
                                       key={customer.customer_id}
                                       onClick={() => handleCustomerAssignment(campaign.id, customer.customer_id)}
-                                      className="w-full text-left px-3 py-2 text-sm text-gray-900 hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                                      className="w-full text-left px-3 py-2 text-sm text-gray-900 hover:bg-gray-100 rounded flex items-center justify-between transition-colors duration-150"
                                     >
-                                      <div className="w-4 h-4 flex items-center justify-center">
-                                        {campaign.customer_id === customer.customer_id && <Check className="w-3 h-3 text-blue-600" />}
-                                      </div>
                                       <div className="flex-1">
                                         <div className="font-medium text-gray-900">
                                           {customer.customer_name || customer.customer_company_name}
@@ -373,6 +363,9 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
                                             {customer.customer_company_name}
                                           </div>
                                         )}
+                                      </div>
+                                      <div className="w-4 h-4 flex items-center justify-center">
+                                        {campaign.customer_id === customer.customer_id && <Check className="w-3 h-3 text-blue-600" />}
                                       </div>
                                     </button>
                                   ))}
@@ -449,32 +442,6 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
               </div>
             )}
           </div>
-        </div>
-      </div>
-      
-      {/* Visible Console */}
-      <div className="fixed bottom-4 right-4 w-96 max-h-64 bg-black text-green-400 font-mono text-xs rounded-lg shadow-xl overflow-hidden z-50">
-        <div className="bg-gray-800 px-3 py-2 border-b border-gray-600">
-          <div className="flex items-center justify-between">
-            <span className="text-white font-semibold">Debug Console</span>
-            <button
-              onClick={() => setConsoleMessages([])}
-              className="text-gray-400 hover:text-white text-xs"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-        <div className="p-3 overflow-y-auto max-h-48">
-          {consoleMessages.length === 0 ? (
-            <div className="text-gray-500">No messages...</div>
-          ) : (
-            consoleMessages.map((message, index) => (
-              <div key={index} className="mb-1 break-words">
-                {message}
-              </div>
-            ))
-          )}
         </div>
       </div>
     </div>

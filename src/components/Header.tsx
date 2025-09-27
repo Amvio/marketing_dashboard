@@ -54,30 +54,32 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <>
       <div className="sticky top-16 z-40 bg-white border-b border-gray-200 px-6 py-4" style={{ backgroundColor: 'white' }}>
-        <div className="mt-4 flex items-center space-x-4 w-full">
+        <div className="mt-4 space-y-4 w-full">
+          {/* First Row */}
+          <div className="flex items-center space-x-4">
           <div className="relative">
             <button
               ref={setButtonRef}
-              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2.5 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 min-w-48 whitespace-nowrap"
+              className="relative appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 w-72 whitespace-nowrap"
               onClick={() => setIsDatePickerOpen(true)}
             >
               <Calendar className="w-4 h-4 text-gray-500" />
               <span className="text-sm font-medium truncate">{dateRangeString}</span>
-              <ChevronDown className="w-4 h-4 text-gray-500 ml-auto" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             </button>
           </div>
           
           <div className="relative">
             <div className="relative">
               <button
-                className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 w-48"
+                className="relative appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 w-72"
                 style={{ backgroundColor: 'white' }}
                 onClick={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
               >
                <span className="text-sm font-medium truncate">
                  {selectedCustomer.customer_name || selectedCustomer.customer_company_name || 'Unbekannter Kunde'}
                </span>
-                <ChevronDown className="w-4 h-4 text-gray-500 ml-auto flex-shrink-0" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 flex-shrink-0" />
               </button>
 
               {isCustomerDropdownOpen && (
@@ -110,14 +112,13 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
           
-          <div className="flex-1 flex items-center space-x-4">
+          <div className="flex items-center space-x-4">
           <MultiSelectDropdown
             options={campaigns.map(c => ({ id: c.id.toString(), name: c.name }))}
             selectedIds={selectedCampaignIds}
             onSelectionChange={onCampaignChange}
             placeholder="Kampagne"
-            icon={<Settings className="w-4 h-4 text-gray-400" />}
-            className="w-64"
+            className="w-72"
           />
           
           <MultiSelectDropdown
@@ -125,44 +126,29 @@ export const Header: React.FC<HeaderProps> = ({
             selectedIds={selectedAdsetIds}
             onSelectionChange={onAdsetChange}
             placeholder="Anzeigengruppe"
-            icon={<Target className="w-4 h-4 text-gray-400" />}
-            className="w-64"
+            className="w-72"
           />
+          </div>
+          </div>
           
+          {/* Second Row */}
+          <div className="flex items-center space-x-4">
           <MultiSelectDropdown
             options={ads.map(a => ({ id: a.id.toString(), name: a.name }))}
             selectedIds={selectedAdIds}
             onSelectionChange={onAdChange}
             placeholder="Creative"
-            icon={<Target className="w-4 h-4 text-gray-400" />}
-            className="w-64"
+            className="w-72"
           />
           
-          <div className="w-64">
-            <button className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 w-full">
+          <div className="w-72">
+            <button className="relative appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 w-full">
               <span className="text-sm font-medium truncate">Vakanz: Alle</span>
-              <ChevronDown className="w-4 h-4 text-gray-500 ml-auto flex-shrink-0" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 flex-shrink-0" />
             </button>
           </div>
           </div>
         </div>
-        
-        {/* Customer Logo - aligned with other elements */}
-      <div className="absolute right-6 top-4 mt-4">
-        {selectedCustomer.logo_url ? (
-          <img 
-            src={selectedCustomer.logo_url} 
-            alt={selectedCustomer.customer_name || selectedCustomer.customer_company_name || 'Customer Logo'}
-            className="h-8 w-auto"
-          />
-        ) : (
-          <div className="text-right">
-            <span className="text-gray-900 font-semibold text-sm">
-              {selectedCustomer.customer_name || selectedCustomer.customer_company_name || 'Unbekannter Kunde'}
-            </span>
-          </div>
-        )}
-      </div>
       </div>
       
       <DateRangePicker
