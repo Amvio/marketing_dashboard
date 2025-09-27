@@ -103,7 +103,7 @@ exports.handler = async (event, context) => {
     let campaignsData = [];
     
     for (const adAccount of adAccountsData || []) {
-      const campaignsUrl = `https://graph.facebook.com/v19.0/act_${adAccount.id}/campaigns`;
+      const campaignsUrl = `https://graph.facebook.com/v19.0/${adAccount.id}/campaigns`;
       const campaignsParams = new URLSearchParams({
         access_token: accessToken,
         fields: 'daily_budget,account_id, created_time,id,name,objective,start_time,status,stop_time,account_id,lifetime_budget,updated_time',
