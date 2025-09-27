@@ -1,4 +1,5 @@
 const fetch = require('node-fetch').default;
+const { createClient } = require('@supabase/supabase-js');
 
 exports.handler = async (event, context) => {
   // Handle CORS for browser requests
@@ -51,7 +52,7 @@ exports.handler = async (event, context) => {
         const metaApiUrl = `https://graph.facebook.com/v19.0/me/adaccounts`;
         const metaApiParams = new URLSearchParams({
           access_token: accessToken,
-          fields: 'id,name,currency,timezone_name,account_status,created_time',
+          fields: 'account_id,account_status,name,currency,timezone_name,created_time',
           limit: '25'
         });
         
@@ -95,6 +96,85 @@ exports.handler = async (event, context) => {
           hasData: !!metaData.data
         });
 
+        // Initialize Supabase client for server-side operations
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        
+        if (!supabaseUrl || !supabaseServiceRoleKey) {
+          console.error('Supabase configuration missing');
+          return {
+            statusCode: 500,
+            headers: {
+              ...headers,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              error: 'Configuration Error',
+              message: 'Supabase URL or Service Role Key is not configured.',
+            }),
+          };
+        }
+
+        const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+        
+        // Process and upsert ad accounts to Supabase
+        let upsertResults = {
+          processed: 0,
+          inserted: 0,
+          updated: 0,
+          errors: []
+        };
+
+        if (metaData.data && metaData.data.length > 0) {
+          console.log(`Processing ${metaData.data.length} ad accounts for upsert...`);
+          
+          for (const adAccount of metaData.data) {
+            try {
+              // Transform Meta API data to match Supabase schema
+              const adAccountData = {
+                id: parseInt(adAccount.account_id), // Convert string ID to integer
+                name: adAccount.name,
+                currency: adAccount.currency,
+                timezone_name: adAccount.timezone_name,
+                account_status: adAccount.account_status,
+                created_time: adAccount.created_time ? new Date(adAccount.created_time).toISOString() : null
+              };
+
+              console.log(`Upserting ad account: ${adAccountData.id} - ${adAccountData.name}`);
+
+              // Perform upsert operation
+              const { data, error, count } = await supabase
+                .from('ad_accounts')
+                .upsert(adAccountData, { 
+                  onConflict: 'id',
+                  count: 'exact'
+                })
+                .select();
+
+              if (error) {
+                console.error(`Error upserting ad account ${adAccountData.id}:`, error);
+                upsertResults.errors.push({
+                  adAccountId: adAccountData.id,
+                  error: error.message
+                });
+              } else {
+                upsertResults.processed++;
+                // Note: Supabase doesn't directly tell us if it was an insert or update
+                // We could implement additional logic to check this if needed
+                console.log(`Successfully upserted ad account ${adAccountData.id}`);
+              }
+            } catch (processingError) {
+              console.error(`Error processing ad account ${adAccount.id}:`, processingError);
+              upsertResults.errors.push({
+                adAccountId: adAccount.id,
+                error: processingError.message
+              });
+            }
+          }
+        }
+
+        console.log('Upsert operation completed:', upsertResults);
+
         // Return the Meta Graph API data
         return {
           statusCode: 200,
@@ -110,6 +190,11 @@ exports.handler = async (event, context) => {
             paging: metaData.paging || null,
             summary: metaData.summary || null,
             totalCount: metaData.data ? metaData.data.length : 0,
+            supabaseSync: {
+              processed: upsertResults.processed,
+              errors: upsertResults.errors.length,
+              errorDetails: upsertResults.errors
+            }
           }),
         };
 
