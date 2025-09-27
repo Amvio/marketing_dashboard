@@ -91,10 +91,7 @@ exports.handler = async (event, context) => {
         }
 
         const metaData = await metaResponse.json();
-        console.log('Meta Graph API response received:', {
-          dataCount: metaData.data ? metaData.data.length : 0,
-          hasData: !!metaData.data
-        });
+        console.log('ad_accounts fetched successfully from Meta Graph API');
 
         // Initialize Supabase client for server-side operations
         const supabaseUrl = process.env.SUPABASE_URL;
@@ -173,7 +170,7 @@ exports.handler = async (event, context) => {
           }
         }
 
-        console.log('Upsert operation completed:', upsertResults);
+        console.log('Supabase Sync completed. Processed: ' + upsertResults.processed + ', Errors: ' + upsertResults.errors.length);
 
         // Return the Meta Graph API data
         return {
@@ -192,8 +189,8 @@ exports.handler = async (event, context) => {
             totalCount: metaData.data ? metaData.data.length : 0,
             supabaseSync: {
               processed: upsertResults.processed,
-              errors: upsertResults.errors.length,
-              errorDetails: upsertResults.errors
+              Fehler: upsertResults.errors.length,
+              Fehlerdetails: upsertResults.errors
             }
           }),
         };
