@@ -106,7 +106,7 @@ exports.handler = async (event, context) => {
       const campaignsUrl = `https://graph.facebook.com/v19.0/${adAccount.id}/campaigns`;
       const campaignsParams = new URLSearchParams({
         access_token: accessToken,
-        fields: 'daily_budget,account_id, created_time,id,name,objective,start_time,status,stop_time,account_id,lifetime_budget,updated_time',
+        fields: 'daily_budget,created_time,id,name,objective,start_time,status,stop_time,account_id,lifetime_budget,updated_time',
         limit: '100'
       });
       
