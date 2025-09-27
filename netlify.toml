@@ -6,6 +6,14 @@
 [functions]
   node_bundler = "esbuild"
 
+[[functions]]
+  function = "get_ad_accounts"
+  schedule = "0 5 * * *"
+
+[[functions]]
+  function = "get_campaigns"
+  schedule = "15 5 * * *"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"

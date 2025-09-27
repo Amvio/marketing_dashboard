@@ -17,44 +17,97 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'success' | 'error' | null>>({});
+  const [loadingAdAccountsAbfrage, setLoadingAdAccountsAbfrage] = useState(false);
+  const [loadingCampaignsAbfrage, setLoadingCampaignsAbfrage] = useState(false);
 
-  // Handle Abfrage button click for ad_accounts
-  const handleAbfrageClick = async (tableName: string) => {
-    if (tableName === 'ad_accounts') {
-      addConsoleMessage?.(`Calling Netlify function for ${tableName}...`);
-      try {
-        console.log('Calling Netlify function for ad_accounts...');
-        const response = await fetch('/api/get_ad_accounts?table=ad_accounts', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Netlify function error:', errorText);
-          addConsoleMessage?.(`Netlify function error: ${errorText}`);
-          return;
-        }
-
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          const responseText = await response.text();
-          console.error('Non-JSON response:', responseText);
-          addConsoleMessage?.(`Non-JSON response: ${responseText}`);
-          return;
-        }
-
-        const data = await response.json();
-        console.log('Netlify function response:', data);
-        addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
-      } catch (error) {
-        console.error('Error calling Netlify function:', error);
-        addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  // Standalone handler for ad_accounts Abfrage
+  const handleAbfrageAdAccounts = async () => {
+    setLoadingAdAccountsAbfrage(true);
+    addConsoleMessage?.('Calling Netlify function for ad_accounts...');
+    
+    try {
+      console.log('Calling Netlify function for ad_accounts...');
+      const response = await fetch('/api/get_ad_accounts?table=ad_accounts', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
       }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Netlify function response:', data);
+      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+      
+      // Refresh the ad_accounts table data after successful sync
+      await fetchTableData('ad_accounts');
+      addConsoleMessage?.('Ad accounts table refreshed after sync');
+    } catch (error) {
+      console.error('Error calling Netlify function:', error);
+      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingAdAccountsAbfrage(false);
     }
   };
+
+  // Standalone handler for campaigns Abfrage
+  const handleAbfrageCampaigns = async () => {
+    setLoadingCampaignsAbfrage(true);
+    addConsoleMessage?.('Calling Netlify function for campaigns...');
+    
+    try {
+      console.log('Calling Netlify function for campaigns...');
+      const response = await fetch('/api/get_campaigns', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Netlify function response:', data);
+      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+      
+      // Refresh the campaigns table data after successful sync
+      await fetchTableData('campaigns');
+      addConsoleMessage?.('Campaigns table refreshed after sync');
+    } catch (error) {
+      console.error('Error calling Netlify function:', error);
+      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingCampaignsAbfrage(false);
+    }
+  };
+
   const refreshAllTables = async () => {
     // Clear all existing data and status
     setTableData({});
@@ -231,14 +284,36 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                         <div className="flex items-center space-x-1">
                           <CheckCircle className="w-4 h-4 text-green-600" />
                           <span className="text-xs text-green-600 font-medium">Verbunden</span>
-                          <button
-                            onClick={() => handleAbfrageClick(tableName)}
-                            className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150"
-                            title="Abfrage ausführen"
-                          >
-                            <Search className="w-3 h-3" />
-                            <span>Abfrage</span>
-                          </button>
+                          {tableName === 'ad_accounts' && (
+                            <button
+                              onClick={handleAbfrageAdAccounts}
+                              disabled={loadingAdAccountsAbfrage}
+                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                              title="Ad Accounts von Meta API abrufen"
+                            >
+                              {loadingAdAccountsAbfrage ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                              ) : (
+                                <Search className="w-3 h-3" />
+                              )}
+                              <span>Abfrage</span>
+                            </button>
+                          )}
+                          {tableName === 'campaigns' && (
+                            <button
+                              onClick={handleAbfrageCampaigns}
+                              disabled={loadingCampaignsAbfrage}
+                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                              title="Kampagnen von Meta API abrufen"
+                            >
+                              {loadingCampaignsAbfrage ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                              ) : (
+                                <Search className="w-3 h-3" />
+                              )}
+                              <span>Abfrage</span>
+                            </button>
+                          )}
                         </div>
                       )}
                       {connectionStatus[tableName] === 'error' && (
