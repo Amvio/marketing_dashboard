@@ -106,7 +106,7 @@ exports.handler = async (event, context) => {
       const campaignsUrl = `https://graph.facebook.com/v19.0/act_${adAccount.id}/campaigns`;
       const campaignsParams = new URLSearchParams({
         access_token: accessToken,
-        fields: 'daily_budget,created_time,id,name,objective,start_time,status,stop_time,account_id,lifetime_budget,updated_time',
+        fields: 'daily_budget,created_time,id,name,objective,start_time,status,stop_time,updated_time',
         limit: '100'
       });
       
@@ -147,13 +147,12 @@ exports.handler = async (event, context) => {
       try {
         // Transform Meta API data to match Supabase schema
         const campaignData = {
-          id: parseInt(campaign.id),
-          ad_account_id: campaign.ad_account_id || null,
+          id: String(campaign.id),
+          ad_account_id: String(adAccount.id),
           name: campaign.name,
           status: campaign.status,
           objective: campaign.objective,
-          daily_budget: campaign.daily_budget ? parseInt(campaign.daily_budget) : null,
-          lifetime_budget: campaign.lifetime_budget ? parseInt(campaign.lifetime_budget) : null,
+          daily_budget: campaign.daily_budget ? String(campaign.daily_budget) : null,
           start_time: campaign.start_time ? new Date(campaign.start_time).toISOString() : null,
           end_time: campaign.stop_time ? new Date(campaign.stop_time).toISOString() : null,
           created_time: campaign.created_time ? new Date(campaign.created_time).toISOString() : null,
