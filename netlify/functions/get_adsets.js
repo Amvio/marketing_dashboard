@@ -106,7 +106,7 @@ exports.handler = async (event, context) => {
       const adsetsUrl = `https://graph.facebook.com/v19.0/${campaign.id}/adsets`;
       const adsetsParams = new URLSearchParams({
         access_token: accessToken,
-        fields: 'campaign_id,created_time,end_time,id,name,optimization_goal,status,start_time,updated_time,bid_strategy',
+        fields: 'campaign_id,created_time,id,name,optimization_goal,status,start_time,updated_time,bid_strategy',
         limit: '100'
       });
       
@@ -153,7 +153,6 @@ exports.handler = async (event, context) => {
           optimization_goal: adset.optimization_goal,
           bid_strategy: adset.bid_strategy,
           start_time: adset.start_time ? new Date(adset.start_time).toISOString() : null,
-          end_time: adset.end_time ? new Date(adset.end_time).toISOString() : null,
           created_time: adset.created_time ? new Date(adset.created_time).toISOString() : null,
           updated_time: adset.updated_time ? new Date(adset.updated_time).toISOString() : null
         };
