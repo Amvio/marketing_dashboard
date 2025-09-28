@@ -19,6 +19,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'success' | 'error' | null>>({});
   const [loadingAdAccountsAbfrage, setLoadingAdAccountsAbfrage] = useState(false);
   const [loadingCampaignsAbfrage, setLoadingCampaignsAbfrage] = useState(false);
+  const [loadingAdsetsAbfrage, setLoadingAdsetsAbfrage] = useState(false);
 
   // Standalone handler for ad_accounts Abfrage
   const handleAbfrageAdAccounts = async () => {
@@ -105,6 +106,50 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoadingCampaignsAbfrage(false);
+    }
+  };
+
+  // Standalone handler for adsets Abfrage
+  const handleAbfrageAdsets = async () => {
+    setLoadingAdsetsAbfrage(true);
+    addConsoleMessage?.('Calling Netlify function for adsets...');
+    
+    try {
+      console.log('Calling Netlify function for adsets...');
+      const response = await fetch('/api/get_adsets', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Netlify function response:', data);
+      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+      
+      // Refresh the ad_sets table data after successful sync
+      await fetchTableData('ad_sets');
+      addConsoleMessage?.('Ad sets table refreshed after sync');
+    } catch (error) {
+      console.error('Error calling Netlify function:', error);
+      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingAdsetsAbfrage(false);
     }
   };
 
@@ -307,6 +352,21 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                               title="Kampagnen von Meta API abrufen"
                             >
                               {loadingCampaignsAbfrage ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                              ) : (
+                                <Search className="w-3 h-3" />
+                              )}
+                              <span>Abfrage</span>
+                            </button>
+                          )}
+                          {tableName === 'ad_sets' && (
+                            <button
+                              onClick={handleAbfrageAdsets}
+                              disabled={loadingAdsetsAbfrage}
+                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                              title="Adsets von Meta API abrufen"
+                            >
+                              {loadingAdsetsAbfrage ? (
                                 <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
                               ) : (
                                 <Search className="w-3 h-3" />
