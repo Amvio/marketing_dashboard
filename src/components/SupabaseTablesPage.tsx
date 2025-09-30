@@ -20,6 +20,10 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loadingAdAccountsAbfrage, setLoadingAdAccountsAbfrage] = useState(false);
   const [loadingCampaignsAbfrage, setLoadingCampaignsAbfrage] = useState(false);
   const [loadingAdsetsAbfrage, setLoadingAdsetsAbfrage] = useState(false);
+  const [loadingAdsAbfrage, setLoadingAdsAbfrage] = useState(false);
+  const [loadingCreativesAbfrage, setLoadingCreativesAbfrage] = useState(false);
+  const [showAdsetStatusPopup, setShowAdsetStatusPopup] = useState(false);
+  const [showCreativesStatusPopup, setShowCreativesStatusPopup] = useState(false);
 
   // Standalone handler for ad_accounts Abfrage
   const handleAbfrageAdAccounts = async () => {
@@ -153,6 +157,95 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     }
   };
 
+  // Standalone handler for ads Abfrage
+  const handleAbfrageAds = async (statusFilter: 'active' | 'all') => {
+    setLoadingAdsAbfrage(true);
+    setShowAdsetStatusPopup(false);
+    addConsoleMessage?.(`Calling Netlify function for ads with status filter: ${statusFilter}...`);
+    
+    try {
+      console.log(`Calling Netlify function for ads with status filter: ${statusFilter}...`);
+      const response = await fetch(`/api/get_ads${statusFilter === 'active' ? '?statusFilter=active' : ''}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Netlify function response:', data);
+      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+      
+      // Refresh the ads table data after successful sync
+      await fetchTableData('ads');
+      addConsoleMessage?.('Ads table refreshed after sync');
+    } catch (error) {
+      console.error('Error calling Netlify function:', error);
+      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingAdsAbfrage(false);
+    }
+  };
+
+  // Standalone handler for ad creatives Abfrage
+  const handleAbfrageCreatives = async (statusFilter: 'active' | 'all') => {
+    setLoadingCreativesAbfrage(true);
+    setShowCreativesStatusPopup(false);
+    addConsoleMessage?.(`Calling Netlify function for ad creatives with status filter: ${statusFilter}...`);
+    
+    try {
+      console.log(`Calling Netlify function for ad creatives with status filter: ${statusFilter}...`);
+      const response = await fetch(`/api/get_ad_creatives${statusFilter === 'active' ? '?statusFilter=active' : ''}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Netlify function response:', data);
+      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+      
+      // Refresh the ad_creatives table data after successful sync
+      await fetchTableData('ad_creatives');
+      addConsoleMessage?.('Ad creatives table refreshed after sync');
+    } catch (error) {
+      console.error('Error calling Netlify function:', error);
+      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingCreativesAbfrage(false);
+    }
+  };
   const refreshAllTables = async () => {
     // Clear all existing data and status
     setTableData({});
@@ -374,6 +467,36 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                               <span>Abfrage</span>
                             </button>
                           )}
+                          {tableName === 'ads' && (
+                            <button
+                              onClick={() => setShowAdsetStatusPopup(true)}
+                              disabled={loadingAdsAbfrage}
+                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                              title="Ads von Meta API abrufen"
+                            >
+                              {loadingAdsAbfrage ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                              ) : (
+                                <Search className="w-3 h-3" />
+                              )}
+                              <span>Abfrage</span>
+                            </button>
+                          )}
+                          {tableName === 'ad_creatives' && (
+                            <button
+                              onClick={() => setShowCreativesStatusPopup(true)}
+                              disabled={loadingCreativesAbfrage}
+                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                              title="Ad Creatives von Meta API abrufen"
+                            >
+                              {loadingCreativesAbfrage ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                              ) : (
+                                <Search className="w-3 h-3" />
+                              )}
+                              <span>Abfrage</span>
+                            </button>
+                          )}
                         </div>
                       )}
                       {connectionStatus[tableName] === 'error' && (
@@ -464,6 +587,122 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
           </div>
         </div>
       </div>
+
+      {/* Adset Status Selection Popup */}
+      {showAdsetStatusPopup && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setShowAdsetStatusPopup(false)}
+          />
+          
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div 
+              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 min-w-64 max-h-60 overflow-y-auto"
+              style={{ backgroundColor: 'white' }}
+            >
+              <div className="p-2" style={{ backgroundColor: 'white' }}>
+                <button
+                  onClick={() => handleAbfrageAds('all')}
+                  disabled={loadingAdsAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    {loadingAdsAbfrage ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
+                    ) : null}
+                  </div>
+                  <span className="text-gray-900">Alle Adsets</span>
+                </button>
+                <button
+                  onClick={() => handleAbfrageAds('active')}
+                  disabled={loadingAdsAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    {loadingAdsAbfrage ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
+                    ) : null}
+                  </div>
+                  <span className="text-gray-900">Nur aktive Adsets</span>
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                <button
+                  onClick={() => setShowAdsetStatusPopup(false)}
+                  disabled={loadingAdsAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center"></div>
+                  <span className="text-gray-900">Abbrechen</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Ad Creatives Status Selection Popup */}
+      {showCreativesStatusPopup && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setShowCreativesStatusPopup(false)}
+          />
+          
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div 
+              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 min-w-64 max-h-60 overflow-y-auto"
+              style={{ backgroundColor: 'white' }}
+            >
+              <div className="p-2" style={{ backgroundColor: 'white' }}>
+                <button
+                  onClick={() => handleAbfrageCreatives('all')}
+                  disabled={loadingCreativesAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    {loadingCreativesAbfrage ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
+                    ) : null}
+                  </div>
+                  <span className="text-gray-900">Alle Ads</span>
+                </button>
+                <button
+                  onClick={() => handleAbfrageCreatives('active')}
+                  disabled={loadingCreativesAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    {loadingCreativesAbfrage ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
+                    ) : null}
+                  </div>
+                  <span className="text-gray-900">Nur aktive Ads</span>
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                <button
+                  onClick={() => setShowCreativesStatusPopup(false)}
+                  disabled={loadingCreativesAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center"></div>
+                  <span className="text-gray-900">Abbrechen</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

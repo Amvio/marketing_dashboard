@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Users, RefreshCw, Database, CreditCard as Edit3, X, Plus, ChevronDown, Check } from 'lucide-react';
+import { Target, Users, RefreshCw, Database, CreditCard as Edit3, X, Plus, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { supabase, Customer as SupabaseCustomer } from '../lib/supabase';
 import { SimpleHeader } from './SimpleHeader';
 
@@ -28,6 +28,11 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
   const [customersLoading, setCustomersLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDropdowns, setOpenDropdowns] = useState<Set<number>>(new Set());
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [campaignStatuses, setCampaignStatuses] = useState<string[]>([]);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -90,7 +95,113 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
   useEffect(() => {
     fetchCampaigns();
     fetchCustomers();
+    fetchCampaignStatuses();
   }, []);
+
+  const fetchCampaignStatuses = async () => {
+    try {
+      console.log('Fetching unique campaign statuses...');
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('status')
+        .not('status', 'is', null);
+
+      if (error) {
+        console.error('Error fetching campaign statuses:', error);
+      } else {
+        // Get unique statuses
+        const uniqueStatuses = [...new Set(data?.map(item => item.status).filter(Boolean))];
+        setCampaignStatuses(uniqueStatuses);
+        console.log('Unique campaign statuses:', uniqueStatuses);
+      }
+    } catch (err) {
+      console.error('Exception fetching campaign statuses:', err);
+    }
+  };
+
+  const handleStatusFilter = (status: string | null) => {
+    setSelectedStatus(status);
+    setStatusDropdownOpen(false);
+    addConsoleMessage?.(`Status filter applied: ${status || 'All'}`);
+  };
+
+  const getAssignedCustomer = (customerId: number | null) => {
+    if (!customerId) return null;
+    return customers.find(customer => customer.customer_id === customerId);
+  };
+
+  const handleSort = (columnKey: string) => {
+    if (sortColumn === columnKey) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column and default to ascending
+      setSortColumn(columnKey);
+      setSortDirection('asc');
+    }
+    addConsoleMessage?.(`Sorting by ${columnKey} ${sortDirection === 'asc' ? 'desc' : 'asc'}`);
+  };
+
+  const getSortedAndFilteredCampaigns = () => {
+    let filtered = campaigns;
+    
+    // Apply status filter
+    if (selectedStatus) {
+      filtered = filtered.filter(campaign => campaign.status === selectedStatus);
+    }
+    
+    // Apply sorting
+    if (sortColumn) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+        
+        // Handle special case for customer column
+        if (sortColumn === 'customer') {
+          const customerA = getAssignedCustomer(a.customer_id);
+          const customerB = getAssignedCustomer(b.customer_id);
+          aValue = customerA?.customer_name || customerA?.customer_company_name || '';
+          bValue = customerB?.customer_name || customerB?.customer_company_name || '';
+        } else {
+          aValue = a[sortColumn as keyof CustomerCampaign];
+          bValue = b[sortColumn as keyof CustomerCampaign];
+        }
+        
+        // Handle null/undefined values
+        if (aValue === null || aValue === undefined) aValue = '';
+        if (bValue === null || bValue === undefined) bValue = '';
+        
+        // Convert to strings for comparison
+        const aStr = String(aValue).toLowerCase();
+        const bStr = String(bValue).toLowerCase();
+        
+        // Handle date columns
+        if (sortColumn === 'created_time' || sortColumn === 'updated_time' || sortColumn === 'start_time' || sortColumn === 'end_time') {
+          const aDate = aValue ? new Date(aValue).getTime() : 0;
+          const bDate = bValue ? new Date(bValue).getTime() : 0;
+          return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+        }
+        
+        // Handle numeric columns
+        if (sortColumn === 'daily_budget') {
+          const aNum = Number(aValue) || 0;
+          const bNum = Number(bValue) || 0;
+          return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+        
+        // String comparison
+        if (sortDirection === 'asc') {
+          return aStr.localeCompare(bStr);
+        } else {
+          return bStr.localeCompare(aStr);
+        }
+      });
+    }
+    
+    return filtered;
+  };
+
+  const filteredCampaigns = getSortedAndFilteredCampaigns();
 
   const formatValue = (value: any): string => {
     if (value === null || value === undefined) return '-';
@@ -184,22 +295,17 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
     });
   };
 
-  const getAssignedCustomer = (customerId: number | null) => {
-    if (!customerId) return null;
-    return customers.find(customer => customer.customer_id === customerId);
-  };
-
   // Column mapping for German headers
   const columnHeaders = {
-    name: 'Kampagnenname',
-    customer: 'Zugewiesener Kunde',
-    status: 'Status',
-    objective: 'Ziel',
-    daily_budget: 'Tagesbudget',
-    lifetime_budget: 'Gesamtbudget',
-    start_time: 'Startdatum',
-    end_time: 'Enddatum',
-    created_time: 'Erstellt am'
+    name: { label: 'Kampagnenname', sortable: true },
+    customer: { label: 'Zugewiesener Kunde', sortable: true },
+    status: { label: 'Status', sortable: true },
+    updated_time: { label: 'Geändert', sortable: true },
+    objective: { label: 'Ziel', sortable: true },
+    daily_budget: { label: 'Tagesbudget', sortable: true },
+    start_time: { label: 'Startdatum', sortable: true },
+    end_time: { label: 'Enddatum', sortable: true },
+    created_time: { label: 'Erstellt am', sortable: true }
   };
 
   // Console log for debugging - component render state
@@ -240,6 +346,58 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="text-sm font-medium">Aktualisieren</span>
               </button>
+              <div className="relative">
+                <button
+                  onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                  className="relative appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 w-48"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <span className="text-sm font-medium truncate">Status Filter</span>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 flex-shrink-0" />
+                </button>
+                
+                {statusDropdownOpen && (
+                  <div 
+                    className="absolute top-full left-0 mt-1 w-full min-w-64 bg-white border border-gray-300 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto"
+                    style={{ backgroundColor: 'white' }}
+                  >
+                    <div className="p-2" style={{ backgroundColor: 'white' }}>
+                      <button
+                        onClick={() => handleStatusFilter(null)}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                        style={{ backgroundColor: 'white' }}
+                      >
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          {!selectedStatus && <Check className="w-3 h-3 text-blue-600" />}
+                        </div>
+                        <span className="text-gray-900 font-medium">Alle Status</span>
+                      </button>
+                      <div className="border-t border-gray-100 my-1"></div>
+                      {campaignStatuses.length === 0 ? (
+                        <div className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150" style={{ backgroundColor: 'white' }}>
+                          No statuses found
+                        </div>
+                      ) : (
+                        campaignStatuses.map((status) => (
+                          <button
+                            key={status}
+                            onClick={() => handleStatusFilter(status)}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center justify-between transition-colors duration-150"
+                            style={{ backgroundColor: 'white' }}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <div className="w-4 h-4 flex items-center justify-center">
+                                {selectedStatus === status && <Check className="w-3 h-3 text-blue-600" />}
+                              </div>
+                              <span className="text-gray-900">{status}</span>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -252,7 +410,10 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Alle Kampagnen</h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {loading ? 'Lade Daten...' : `${campaigns.length} Kampagnen gefunden`}
+                    {loading ? 'Lade Daten...' : selectedStatus 
+                      ? `${filteredCampaigns.length} von ${campaigns.length} Kampagnen (Status: ${selectedStatus})`
+                      : `${campaigns.length} Kampagnen gefunden`
+                    }
                   </p>
                 </div>
                 {error && (
@@ -282,29 +443,44 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
                   </button>
                 </div>
               </div>
-            ) : campaigns.length === 0 ? (
+            ) : filteredCampaigns.length === 0 ? (
               <div className="py-12 text-center text-gray-500">
                 <Target className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>Keine Kampagnen gefunden</p>
-                <p className="text-sm">Die Kampagnen-Datenbank ist leer</p>
+                <p>{selectedStatus ? `Keine Kampagnen mit Status "${selectedStatus}" gefunden` : 'Keine Kampagnen gefunden'}</p>
+                <p className="text-sm">{selectedStatus ? 'Versuchen Sie einen anderen Status-Filter' : 'Die Kampagnen-Datenbank ist leer'}</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-max">
                   <thead className="bg-gray-50">
                     <tr>
-                      {Object.entries(columnHeaders).map(([key, header]) => (
+                      {Object.entries(columnHeaders).map(([key, config]) => (
                         <th key={key} className="text-left py-3 px-6 font-medium text-gray-700 whitespace-nowrap">
-                          <span>{header}</span>
+                          {config.sortable ? (
+                            <button
+                              onClick={() => handleSort(key)}
+                              className="flex items-center space-x-1 hover:text-gray-900 transition-colors group"
+                            >
+                              <span>{config.label}</span>
+                              <div className="flex flex-col">
+                                {sortColumn === key && sortDirection === 'asc' ? (
+                                  <ChevronUp className="w-3 h-3 text-blue-600" />
+                                ) : sortColumn === key && sortDirection === 'desc' ? (
+                                  <ChevronDown className="w-3 h-3 text-blue-600" />
+                                ) : (
+                                  <ChevronUp className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                )}
+                              </div>
+                            </button>
+                          ) : (
+                            <span>{config.label}</span>
+                          )}
                         </th>
                       ))}
-                      <th className="text-left py-3 px-6 font-medium text-gray-700 whitespace-nowrap">
-                        Aktionen
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {campaigns.map((campaign) => (
+                    {filteredCampaigns.map((campaign) => (
                       <tr key={campaign.id} className="hover:bg-gray-50 transition-colors">
                         <td className="py-4 px-6 whitespace-nowrap">
                           <div className="font-medium text-gray-900">
@@ -391,17 +567,17 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
                         </td>
                         <td className="py-4 px-6 whitespace-nowrap">
                           <div className="text-gray-900">
+                            {formatDate(campaign.updated_time)}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 whitespace-nowrap">
+                          <div className="text-gray-900">
                             {formatValue(campaign.objective)}
                           </div>
                         </td>
                         <td className="py-4 px-6 whitespace-nowrap">
                           <div className="text-gray-900">
                             {formatBudget(campaign.daily_budget)}
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 whitespace-nowrap">
-                          <div className="text-gray-900">
-                            {formatBudget(campaign.lifetime_budget)}
                           </div>
                         </td>
                         <td className="py-4 px-6 whitespace-nowrap">
@@ -417,22 +593,6 @@ export const SupabaseCustomerCampaignsPage: React.FC<SupabaseCustomerCampaignsPa
                         <td className="py-4 px-6 whitespace-nowrap">
                           <div className="text-gray-900">
                             {formatDate(campaign.created_time)}
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 whitespace-nowrap">
-                          <div className="flex items-center space-x-2">
-                          <button
-                            className="text-blue-600 hover:text-blue-800 transition-colors p-1 rounded"
-                            title="Kampagne bearbeiten"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            className="text-red-600 hover:text-red-800 transition-colors p-1 rounded ml-2"
-                            title="Kampagne löschen"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
                           </div>
                         </td>
                       </tr>

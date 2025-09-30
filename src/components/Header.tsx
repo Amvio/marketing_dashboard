@@ -51,6 +51,43 @@ export const Header: React.FC<HeaderProps> = ({
     onDateRangeChange(newStartDate, newEndDate);
   };
 
+  // Filter adsets based on selected campaigns
+  const filteredAdsets = React.useMemo(() => {
+    console.log('Filtering adsets:', {
+      totalAdsets: adsets.length,
+      selectedCampaignIds,
+      campaigns: campaigns.length,
+      sampleAdset: adsets[0],
+      sampleCampaign: campaigns[0]
+    });
+    
+    // If no adsets available, return empty array
+    if (adsets.length === 0) {
+      console.log('No adsets available');
+      return [];
+    }
+    
+    if (selectedCampaignIds.length === 0) {
+      // If no campaigns selected, show all adsets for the customer
+      const customerCampaignIds = campaigns.map(c => c.id.toString());
+      console.log('No campaigns selected, using customer campaign IDs:', customerCampaignIds);
+      const filtered = adsets.filter(adset => customerCampaignIds.includes((adset.campaign_id || '').toString()));
+      console.log('Filtered adsets for customer campaigns:', filtered.length);
+      return filtered;
+    }
+    
+    // Show adsets only for selected campaigns
+    console.log('Selected campaign IDs as strings:', selectedCampaignIds);
+    const filtered = adsets.filter(adset => {
+      const adsetCampaignId = (adset.campaign_id || '').toString();
+      const matches = selectedCampaignIds.includes(adsetCampaignId);
+      console.log(`Adset ${adset.id} (campaign_id: ${adsetCampaignId}) matches:`, matches);
+      return matches;
+    });
+    console.log('Filtered adsets:', filtered.length);
+    return filtered;
+  }, [adsets, selectedCampaignIds, campaigns]);
+
   return (
     <>
       <div className="sticky top-16 z-40 bg-white border-b border-gray-200 px-6 py-4" style={{ backgroundColor: 'white' }}>
@@ -122,7 +159,7 @@ export const Header: React.FC<HeaderProps> = ({
           />
           
           <MultiSelectDropdown
-            options={adsets.map(a => ({ id: a.id.toString(), name: a.name }))}
+            options={filteredAdsets.map(a => ({ id: a.id.toString(), name: a.name }))}
             selectedIds={selectedAdsetIds}
             onSelectionChange={onAdsetChange}
             placeholder="Anzeigengruppe"

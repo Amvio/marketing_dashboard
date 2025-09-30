@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Mail, Phone, MapPin, Globe, Calendar, RefreshCw, Database, CreditCard as Edit3, X } from 'lucide-react';
+import { Building2, Users, Mail, Phone, MapPin, Globe, Calendar, RefreshCw, Database, CreditCard as Edit3, X, ChevronDown } from 'lucide-react';
 import { supabase, Customer as SupabaseCustomer } from '../lib/supabase';
 import { SimpleHeader } from './SimpleHeader';
 import { AddCustomerForm, CustomerFormData } from './AddCustomerForm';

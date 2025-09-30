@@ -33,7 +33,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    console.log('Fetching adsets from Meta Graph API...');
+    console.log('Fetching ads from Meta Graph API...');
     
     // Get Meta Graph API access token from environment variables
     const accessToken = process.env.META_GRAPH_API_ACCESS_TOKEN;
@@ -74,16 +74,27 @@ exports.handler = async (event, context) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    // Step 1: Get all campaigns from Supabase to fetch adsets for each campaign
-    console.log('Fetching campaign IDs from Supabase campaigns table...');
+    // Get status filter from query parameters
+    const queryParams = event.queryStringParameters || {};
+    const statusFilter = queryParams.statusFilter; // 'active' or null for all
+
+    // Step 1: Get adset IDs from Supabase based on status filter
+    console.log('Fetching adset IDs from Supabase ad_sets table...');
     
-    const { data: campaignsData, error: campaignsError } = await supabase
-      .from('campaigns')
+    let adsetsQuery = supabase
+      .from('ad_sets')
       .select('id')
       .order('id', { ascending: true });
 
-    if (campaignsError) {
-      console.error('Error fetching campaigns from Supabase:', campaignsError);
+    // Apply status filter if specified
+    if (statusFilter === 'active') {
+      adsetsQuery = adsetsQuery.eq('status', 'ACTIVE');
+    }
+
+    const { data: adsetsData, error: adsetsError } = await adsetsQuery;
+
+    if (adsetsError) {
+      console.error('Error fetching adsets from Supabase:', adsetsError);
       return {
         statusCode: 500,
         headers: {
@@ -92,95 +103,94 @@ exports.handler = async (event, context) => {
         },
         body: JSON.stringify({
           error: 'Supabase Error',
-          message: `Failed to fetch campaigns from Supabase: ${campaignsError.message}`,
+          message: `Failed to fetch adsets from Supabase: ${adsetsError.message}`,
         }),
       };
     }
 
-    console.log(`Found ${(campaignsData || []).length} campaigns in Supabase`);
+    console.log(`Found ${(adsetsData || []).length} adsets in Supabase${statusFilter === 'active' ? ' (active only)' : ''}`);
     
-    // Step 2: Get all adsets for each campaign
-    let adsetsData = [];
+    // Step 2: Get all ads for each adset
+    let adsData = [];
     
-    for (const campaign of campaignsData || []) {
-      const adsetsUrl = `https://graph.facebook.com/v19.0/${campaign.id}/adsets`;
-      const adsetsParams = new URLSearchParams({
+    for (const adset of adsetsData || []) {
+      const adsUrl = `https://graph.facebook.com/v19.0/${adset.id}/ads`;
+      const adsParams = new URLSearchParams({
         access_token: accessToken,
-        fields: 'campaign_id,created_time,id,name,optimization_goal,status,start_time,updated_time,bid_strategy',
+        fields: 'ad_set_id,created_time,id,name,status,creative{id},effective_status,updated_time',
         limit: '100'
       });
       
       try {
-        console.log(`Fetching adsets for campaign ${campaign.id}...`);
+        console.log(`Fetching ads for adset ${adset.id}...`);
         
-        const adsetsResponse = await fetch(`${adsetsUrl}?${adsetsParams.toString()}`, {
+        const adsResponse = await fetch(`${adsUrl}?${adsParams.toString()}`, {
           method: 'GET',
           headers: { 'Accept': 'application/json' },
         });
 
-        if (adsetsResponse.ok) {
-          const adsetsResult = await adsetsResponse.json();
-          const adsetsWithCampaign = (adsetsResult.data || []).map(adset => ({
-            ...adset,
-            campaign_id: campaign.id
+        if (adsResponse.ok) {
+          const adsResult = await adsResponse.json();
+          const adsWithAdset = (adsResult.data || []).map(ad => ({
+            ...ad,
+            ad_set_id: adset.id,
+            creative_id: ad.creative ? ad.creative.id : null
           }));
-          adsetsData.push(...adsetsWithCampaign);
-          console.log(`Successfully fetched ${adsetsWithCampaign.length} adsets for campaign ${campaign.id}`);
+          adsData.push(...adsWithAdset);
+          console.log(`Successfully fetched ${adsWithAdset.length} ads for adset ${adset.id}`);
         } else {
-          console.error(`Error response from Meta API for campaign ${campaign.id}:`, adsetsResponse.status, adsetsResponse.statusText);
+          console.error(`Error response from Meta API for adset ${adset.id}:`, adsResponse.status, adsResponse.statusText);
         }
       } catch (error) {
-        console.error(`Error fetching adsets for campaign ${campaign.id}:`, error);
+        console.error(`Error fetching ads for adset ${adset.id}:`, error);
       }
     }
 
-    console.log(`Fetched ${adsetsData.length} adsets from Meta Graph API`);
+    console.log(`Fetched ${adsData.length} ads from Meta Graph API`);
 
-    // Process and upsert adsets to Supabase
+    // Process and upsert ads to Supabase
     let upsertResults = {
       processed: 0,
       errors: []
     };
 
-    for (const adset of adsetsData) {
+    for (const ad of adsData) {
       try {
         // Transform Meta API data to match Supabase schema
-        const adsetData = {
-          id: String(adset.id),
-          campaign_id: String(adset.campaign_id),
-          name: adset.name,
-          status: adset.status,
-          optimization_goal: adset.optimization_goal,
-          bid_strategy: adset.bid_strategy,
-          start_time: adset.start_time ? new Date(adset.start_time).toISOString() : null,
-          created_time: adset.created_time ? new Date(adset.created_time).toISOString() : null,
-          updated_time: adset.updated_time ? new Date(adset.updated_time).toISOString() : null
+        const adData = {
+          id: parseInt(ad.id),
+          ad_set_id: parseInt(ad.ad_set_id),
+          name: ad.name,
+          status: ad.status,
+          creative_id: ad.creative_id ? parseInt(ad.creative_id) : null,
+          effective_status: ad.effective_status,
+          created_time: ad.created_time ? new Date(ad.created_time).toISOString() : null,
+          updated_time: ad.updated_time ? new Date(ad.updated_time).toISOString() : null
         };
 
-
-        console.log(`Upserting adset: ${adsetData.id} - ${adsetData.name}`);
+        console.log(`Upserting ad: ${adData.id} - ${adData.name}`);
 
         // Perform upsert operation
         const { error } = await supabase
-          .from('ad_sets')
-          .upsert(adsetData, { 
+          .from('ads')
+          .upsert(adData, { 
             onConflict: 'id'
           });
 
         if (error) {
-          console.error(`Error upserting adset ${adsetData.id}:`, error);
+          console.error(`Error upserting ad ${adData.id}:`, error);
           upsertResults.errors.push({
-            adsetId: adsetData.id,
+            adId: adData.id,
             error: error.message
           });
         } else {
           upsertResults.processed++;
-          console.log(`Successfully upserted adset ${adsetData.id}`);
+          console.log(`Successfully upserted ad ${adData.id}`);
         }
       } catch (processingError) {
-        console.error(`Error processing adset ${adset.id}:`, processingError);
+        console.error(`Error processing ad ${ad.id}:`, processingError);
         upsertResults.errors.push({
-          adsetId: adset.id,
+          adId: ad.id,
           error: processingError.message
         });
       }
@@ -196,10 +206,11 @@ exports.handler = async (event, context) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message: 'Adsets fetched successfully from Meta Graph API',
+        message: 'Ads fetched successfully from Meta Graph API',
         source: 'Meta Graph API',
         timestamp: new Date().toISOString(),
-        totalCount: adsetsData.length,
+        statusFilter: statusFilter || 'all',
+        totalCount: adsData.length,
         supabaseSync: {
           processed: upsertResults.processed,
           errors: upsertResults.errors.length,

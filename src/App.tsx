@@ -633,10 +633,27 @@ function App() {
 
   const handleCustomerChange = (customer: Customer) => {
     setSelectedCustomer(customer);
-    // Reset all dependent selections when customer changes to maintain hierarchy
-    setSelectedCampaignIds([]);
-    setSelectedAdIds([]);
-    setSelectedAdsetIds([]);
+    
+    // Pre-select all campaigns, adsets, and ads for the selected customer
+    const customerCampaigns = supabaseCampaigns.filter(campaign => 
+      campaign.customer_id === customer.customer_id
+    );
+    const customerCampaignIds = customerCampaigns.map(campaign => campaign.id.toString());
+    
+    const customerAdsets = supabaseAdsets.filter(adset => 
+      customerCampaigns.some(campaign => campaign.id === adset.campaign_id)
+    );
+    const customerAdsetIds = customerAdsets.map(adset => adset.id.toString());
+    
+    const customerAds = supabaseAds.filter(ad => 
+      customerAdsets.some(adset => adset.id === ad.ad_set_id)
+    );
+    const customerAdIds = customerAds.map(ad => ad.id.toString());
+    
+    // Set all the pre-selected IDs
+    setSelectedCampaignIds(customerCampaignIds);
+    setSelectedAdsetIds(customerAdsetIds);
+    setSelectedAdIds(customerAdIds);
   };
 
   const handleCampaignChange = (campaignIds: string[]) => {

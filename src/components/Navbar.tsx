@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Home, Settings, ChevronDown, FileDown, Terminal } from 'lucide-react';
 import { Customer } from '../types/dashboard';
+import Logo from '/Logo.png';
 
 interface NavbarProps {
   onNavigateToDashboard?: () => void;
@@ -28,6 +29,30 @@ export const Navbar: React.FC<NavbarProps> = ({
   onClearConsole
 }) => {
   const [openDropdown, setOpenDropdown] = useState<'menu' | 'settings' | 'console' | null>(null);
+  const menuDropdownRef = useRef<HTMLDivElement>(null);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const consoleDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      
+      if (openDropdown === 'menu' && menuDropdownRef.current && !menuDropdownRef.current.contains(target)) {
+        setOpenDropdown(null);
+      }
+      
+      if (openDropdown === 'settings' && settingsDropdownRef.current && !settingsDropdownRef.current.contains(target)) {
+        setOpenDropdown(null);
+      }
+      
+      if (openDropdown === 'console' && consoleDropdownRef.current && !consoleDropdownRef.current.contains(target)) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openDropdown]);
 
   const handleDashboardClick = () => {
     if (onNavigateToDashboard) {
@@ -64,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-3">
               <img 
-                src="/Schmal_Amvio Logo.png" 
+                src={Logo} 
                 alt="AMVIO" 
                 className="h-8 w-auto"
               />
@@ -99,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         <div className="flex items-center space-x-3">
-          <div className="relative">
+          <div className="relative" ref={menuDropdownRef}>
             <button
               onClick={() => setOpenDropdown(openDropdown === 'menu' ? null : 'menu')}
               className="flex items-center space-x-2 border-2 border-primary-blue hover:border-secondary-blue text-primary-blue hover:text-secondary-blue bg-transparent px-4 py-2 rounded-lg transition-colors duration-200"
@@ -111,13 +136,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             
             {openDropdown === 'menu' && (
               <div 
-                className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-[10000]"
+                className="absolute top-full right-0 mt-1 w-full min-w-64 bg-white border border-gray-300 rounded-lg shadow-xl z-[10000] max-h-60 overflow-y-auto"
                 style={{ backgroundColor: 'white' }}
               >
                 <div className="p-2" style={{ backgroundColor: 'white' }}>
                   <button 
                     onClick={handleDashboardClick}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150" 
+                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
                     style={{ backgroundColor: 'white' }}
                   >
                     <div className="w-4 h-4 flex items-center justify-center">
@@ -126,7 +151,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                   <button 
                     onClick={handleCustomersClick}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150" 
+                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
                     style={{ backgroundColor: 'white' }}
                   >
                     <div className="w-4 h-4 flex items-center justify-center">
@@ -135,7 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                   <button 
                     onClick={handleSupabaseTablesClick}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150" 
+                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
                     style={{ backgroundColor: 'white' }}
                   >
                     <div className="w-4 h-4 flex items-center justify-center">
@@ -144,7 +169,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                   <button 
                     onClick={handleSupabaseCampaignsClick}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150" 
+                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
                     style={{ backgroundColor: 'white' }}
                   >
                     <div className="w-4 h-4 flex items-center justify-center">
@@ -161,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          <div className="relative">
+          <div className="relative" ref={consoleDropdownRef}>
             <button
               onClick={() => setOpenDropdown(openDropdown === 'console' ? null : 'console')}
               className="flex items-center space-x-2 border-2 border-primary-blue hover:border-secondary-blue text-primary-blue hover:text-secondary-blue bg-transparent px-4 py-2 rounded-lg transition-colors duration-200"
@@ -210,7 +235,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-sm font-medium">Export</span>
           </button>
 
-          <div className="relative">
+          <div className="relative" ref={settingsDropdownRef}>
             <button
               onClick={() => setOpenDropdown(openDropdown === 'settings' ? null : 'settings')}
               className="flex items-center space-x-2 border-2 border-primary-blue hover:border-secondary-blue text-primary-blue hover:text-secondary-blue bg-transparent px-4 py-2 rounded-lg transition-colors duration-200"
@@ -222,7 +247,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             
             {openDropdown === 'settings' && (
               <div 
-                className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-[10001]"
+                className="absolute top-full right-0 mt-1 w-full min-w-64 bg-white border border-gray-300 rounded-lg shadow-xl z-[10001] max-h-60 overflow-y-auto"
                 style={{ backgroundColor: 'white' }}
               >
                 <div className="p-2" style={{ backgroundColor: 'white' }}>
