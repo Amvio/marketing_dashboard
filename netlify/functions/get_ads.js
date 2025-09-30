@@ -158,11 +158,11 @@ exports.handler = async (event, context) => {
       try {
         // Transform Meta API data to match Supabase schema
         const adData = {
-          id: parseInt(ad.id),
-          ad_set_id: parseInt(ad.ad_set_id),
+          id: String(ad.id),
+          ad_set_id: String(ad.ad_set_id),
           name: ad.name,
           status: ad.status,
-          creative_id: ad.creative_id ? parseInt(ad.creative_id) : null,
+          creative_id: ad.creative_id ? String(ad.creative_id) : null,
           effective_status: ad.effective_status,
           created_time: ad.created_time ? new Date(ad.created_time).toISOString() : null,
           updated_time: ad.updated_time ? new Date(ad.updated_time).toISOString() : null

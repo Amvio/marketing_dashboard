@@ -129,7 +129,7 @@ exports.handler = async (event, context) => {
             try {
               // Transform Meta API data to match Supabase schema
               const adAccountData = {
-                id: parseInt(adAccount.account_id), // Convert string ID to integer
+                id: String(adAccount.account_id), // Keep ID as string
                 name: adAccount.name,
                 currency: adAccount.currency,
                 timezone_name: adAccount.timezone_name,
