@@ -80,11 +80,10 @@ exports.handler = async (event, context) => {
 
     // Step 1: Get ad IDs from Supabase based on status filter
     console.log('Fetching ad IDs from Supabase ads table...');
-    
+
     let adsQuery = supabase
       .from('ads')
-      .select('id, creative_id')
-      .not('creative_id', 'is', null)
+      .select('id')
       .order('id', { ascending: true });
 
     // Apply status filter if specified
@@ -110,43 +109,51 @@ exports.handler = async (event, context) => {
     }
 
     console.log(`Found ${(adsData || []).length} ads in Supabase${statusFilter === 'active' ? ' (active only)' : ''}`);
-    
-    // Get unique creative IDs
-    const uniqueCreativeIds = [...new Set((adsData || []).map(ad => ad.creative_id).filter(Boolean))];
-    console.log(`Found ${uniqueCreativeIds.length} unique creative IDs`);
-    
-    // Step 2: Get all ad creatives for each creative ID
+
+    // Get unique ad IDs
+    const uniqueAdIds = [...new Set((adsData || []).map(ad => ad.id).filter(Boolean))];
+    console.log(`Found ${uniqueAdIds.length} unique ad IDs`);
+
+    // Step 2: Get creative for each ad using Meta Graph API
     let creativesData = [];
-    
-    for (const creativeId of uniqueCreativeIds) {
-      const creativesUrl = `https://graph.facebook.com/v19.0/${creativeId}`;
-      const creativesParams = new URLSearchParams({
+
+    for (const adId of uniqueAdIds) {
+      const adUrl = `https://graph.facebook.com/v19.0/${adId}`;
+      const adParams = new URLSearchParams({
         access_token: accessToken,
-        fields: 'id,name,title,body,image_url,video_id,thumbnail_url,url_tags,call_to_action_type,object_story_spec,asset_feed_spec,created_time,updated_time',
-        limit: '100'
+        fields: 'creative{id,name,title,body,image_url,video_id,thumbnail_url,url_tags,call_to_action_type,object_story_spec,asset_feed_spec,created_time,updated_time}',
       });
-      
+
       try {
-        console.log(`Fetching creative ${creativeId}...`);
-        
-        const creativesResponse = await fetch(`${creativesUrl}?${creativesParams.toString()}`, {
+        console.log(`Fetching creative for ad ${adId}...`);
+
+        const adResponse = await fetch(`${adUrl}?${adParams.toString()}`, {
           method: 'GET',
           headers: { 'Accept': 'application/json' },
         });
 
-        if (creativesResponse.ok) {
-          const creativesResult = await creativesResponse.json();
-          creativesData.push(creativesResult);
-          console.log(`Successfully fetched creative ${creativeId}`);
+        if (adResponse.ok) {
+          const adResult = await adResponse.json();
+          if (adResult.creative) {
+            creativesData.push(adResult.creative);
+            console.log(`Successfully fetched creative ${adResult.creative.id} for ad ${adId}`);
+          } else {
+            console.log(`No creative found for ad ${adId}`);
+          }
         } else {
-          console.error(`Error response from Meta API for creative ${creativeId}:`, creativesResponse.status, creativesResponse.statusText);
+          console.error(`Error response from Meta API for ad ${adId}:`, adResponse.status, adResponse.statusText);
         }
       } catch (error) {
-        console.error(`Error fetching creative ${creativeId}:`, error);
+        console.error(`Error fetching creative for ad ${adId}:`, error);
       }
     }
 
-    console.log(`Fetched ${creativesData.length} ad creatives from Meta Graph API`);
+    // Remove duplicate creatives based on ID
+    const uniqueCreatives = Array.from(
+      new Map(creativesData.map(creative => [creative.id, creative])).values()
+    );
+
+    console.log(`Fetched ${uniqueCreatives.length} unique ad creatives from Meta Graph API`);
 
     // Process and upsert ad creatives to Supabase
     let upsertResults = {
@@ -154,7 +161,7 @@ exports.handler = async (event, context) => {
       errors: []
     };
 
-    for (const creative of creativesData) {
+    for (const creative of uniqueCreatives) {
       try {
         // Transform Meta API data to match Supabase schema
         const creativeData = {
@@ -215,7 +222,7 @@ exports.handler = async (event, context) => {
         source: 'Meta Graph API',
         timestamp: new Date().toISOString(),
         statusFilter: statusFilter || 'all',
-        totalCount: creativesData.length,
+        totalCount: uniqueCreatives.length,
         supabaseSync: {
           processed: upsertResults.processed,
           errors: upsertResults.errors.length,
