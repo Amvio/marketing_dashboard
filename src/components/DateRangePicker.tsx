@@ -90,10 +90,27 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   React.useEffect(() => {
     if (isOpen && buttonRef) {
       const rect = buttonRef.getBoundingClientRect();
-      setPopupPosition({
-        top: rect.bottom + window.scrollY + 8,
-        left: rect.left + window.scrollX + 200 // Move to the right
-      });
+      const popupWidth = 384;
+      const popupHeight = 600;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let left = rect.left + window.scrollX;
+      let top = rect.bottom + window.scrollY + 8;
+
+      if (left + popupWidth > viewportWidth) {
+        left = rect.right + window.scrollX - popupWidth;
+      }
+
+      if (left < 0) {
+        left = 10;
+      }
+
+      if (top + popupHeight > viewportHeight + window.scrollY) {
+        top = rect.top + window.scrollY - popupHeight - 8;
+      }
+
+      setPopupPosition({ top, left });
     }
   }, [isOpen, buttonRef]);
 

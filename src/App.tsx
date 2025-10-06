@@ -9,6 +9,7 @@ import { MetricCard } from './components/MetricCard';
 import { LeadChart } from './components/LeadChart';
 import { AdPerformanceTable } from './components/AdPerformanceTable';
 import { TaskManager } from './components/TaskManager';
+import { ChangelogManager } from './components/ChangelogManager';
 import { formatDateRange, getPreviousPeriodDateRange, getAggregatedMetricsForPeriod, generateDateRange, getDailyAggregatedChartData } from './utils/dateUtils';
 import { Customer, Adset, Task, Campaign, Ad, AdInsight } from './types/dashboard';
 import { MousePointer2, Eye, BarChart3, Users, ExternalLink, UserPlus, MessageSquare, CreditCard as Edit3, DollarSign, Target, TrendingUp, Printer } from 'lucide-react';
@@ -40,7 +41,8 @@ function App() {
   const [supabaseAds, setSupabaseAds] = useState<Ad[]>([]);
   const [adInsights, setAdInsights] = useState<AdInsight[]>([]);
   const [adCreatives, setAdCreatives] = useState<any[]>([]);
-  
+  const [changelogEntries, setChangelogEntries] = useState<Array<{ date: string; title: string }>>([]);
+
   // Loading states
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
@@ -424,6 +426,55 @@ function App() {
 
     fetchAdCreatives();
   }, []);
+
+  // Fetch changelog entries
+  React.useEffect(() => {
+    const fetchChangelogEntries = async () => {
+      if (!selectedCustomer) {
+        setChangelogEntries([]);
+        return;
+      }
+
+      try {
+        let query = supabase
+          .from('changelog')
+          .select('date_changelog, title')
+          .eq('customer_id', selectedCustomer.customer_id);
+
+        if (selectedCampaignIds.length > 0) {
+          query = query.in('campaign_id', selectedCampaignIds);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('Error fetching changelog entries:', error);
+        } else if (data) {
+          console.log('Fetched changelog data:', data);
+          const entries = data
+            .map(entry => {
+              if (entry.date_changelog && entry.title) {
+                const date = new Date(entry.date_changelog);
+                const formattedDate = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                console.log('Changelog entry:', { original: entry.date_changelog, formatted: formattedDate, title: entry.title });
+                return {
+                  date: formattedDate,
+                  title: entry.title
+                };
+              }
+              return null;
+            })
+            .filter((entry): entry is { date: string; title: string } => entry !== null);
+          console.log('Processed changelog entries:', entries);
+          setChangelogEntries(entries);
+        }
+      } catch (err) {
+        console.error('Exception fetching changelog entries:', err);
+      }
+    };
+
+    fetchChangelogEntries();
+  }, [selectedCustomer, selectedCampaignIds]);
 
   // Update metrics data when customer changes
   React.useEffect(() => {
@@ -918,14 +969,15 @@ function App() {
         
         {/* Lead Chart */}
         <div className="grid grid-cols-1 gap-6">
-          <LeadChart 
-            data={currentChartData} 
+          <LeadChart
+            data={currentChartData}
             metricsData={metricsData.map(m => ({
               id: m.id,
               title: m.title,
               value: m.value,
               chartData: m.chartData
             }))}
+            changelogEntries={changelogEntries}
           />
         </div>
         
@@ -952,7 +1004,15 @@ function App() {
             selectedCustomerId={selectedCustomer.customer_id}
           />
         </div>
-        
+
+        {/* Changelog Manager */}
+        <div className="grid grid-cols-1 gap-6">
+          <ChangelogManager
+            selectedCustomerId={selectedCustomer.customer_id}
+            selectedCampaignIds={selectedCampaignIds}
+          />
+        </div>
+
         {/* Print Button */}
       </div>
     </div>

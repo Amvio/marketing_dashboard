@@ -22,8 +22,10 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loadingAdsetsAbfrage, setLoadingAdsetsAbfrage] = useState(false);
   const [loadingAdsAbfrage, setLoadingAdsAbfrage] = useState(false);
   const [loadingCreativesAbfrage, setLoadingCreativesAbfrage] = useState(false);
+  const [loadingInsightsAbfrage, setLoadingInsightsAbfrage] = useState(false);
   const [showAdsetStatusPopup, setShowAdsetStatusPopup] = useState(false);
   const [showCreativesStatusPopup, setShowCreativesStatusPopup] = useState(false);
+  const [showInsightsStatusPopup, setShowInsightsStatusPopup] = useState(false);
 
   // Standalone handler for ad_accounts Abfrage
   const handleAbfrageAdAccounts = async () => {
@@ -207,7 +209,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     setLoadingCreativesAbfrage(true);
     setShowCreativesStatusPopup(false);
     addConsoleMessage?.(`Calling Netlify function for ad creatives with status filter: ${statusFilter}...`);
-    
+
     try {
       console.log(`Calling Netlify function for ad creatives with status filter: ${statusFilter}...`);
       const response = await fetch(`/api/get_ad_creatives${statusFilter === 'active' ? '?statusFilter=active' : ''}`, {
@@ -216,7 +218,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Netlify function error:', errorText);
@@ -235,7 +237,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       const data = await response.json();
       console.log('Netlify function response:', data);
       addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
-      
+
       // Refresh the ad_creatives table data after successful sync
       await fetchTableData('ad_creatives');
       addConsoleMessage?.('Ad creatives table refreshed after sync');
@@ -244,6 +246,51 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoadingCreativesAbfrage(false);
+    }
+  };
+
+  // Standalone handler for ad insights Abfrage
+  const handleAbfrageInsights = async (statusFilter: 'active' | 'all') => {
+    setLoadingInsightsAbfrage(true);
+    setShowInsightsStatusPopup(false);
+    addConsoleMessage?.(`Calling Netlify function for ad insights with status filter: ${statusFilter}...`);
+
+    try {
+      console.log(`Calling Netlify function for ad insights with status filter: ${statusFilter}...`);
+      const response = await fetch(`/api/get_ad_insights${statusFilter === 'active' ? '?statusFilter=active' : ''}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Netlify function response:', data);
+      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+
+      // Refresh the ad_insights table data after successful sync
+      await fetchTableData('ad_insights');
+      addConsoleMessage?.('Ad insights table refreshed after sync');
+    } catch (error) {
+      console.error('Error calling Netlify function:', error);
+      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingInsightsAbfrage(false);
     }
   };
   const refreshAllTables = async () => {
@@ -497,6 +544,21 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                               <span>Abfrage</span>
                             </button>
                           )}
+                          {tableName === 'ad_insights' && (
+                            <button
+                              onClick={() => setShowInsightsStatusPopup(true)}
+                              disabled={loadingInsightsAbfrage}
+                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                              title="Ad Insights von Meta API abrufen"
+                            >
+                              {loadingInsightsAbfrage ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                              ) : (
+                                <Search className="w-3 h-3" />
+                              )}
+                              <span>Abfrage</span>
+                            </button>
+                          )}
                         </div>
                       )}
                       {connectionStatus[tableName] === 'error' && (
@@ -650,14 +712,14 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       {showCreativesStatusPopup && (
         <>
           {/* Backdrop */}
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 z-40"
             onClick={() => setShowCreativesStatusPopup(false)}
           />
-          
+
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div 
+            <div
               className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 min-w-64 max-h-60 overflow-y-auto"
               style={{ backgroundColor: 'white' }}
             >
@@ -692,6 +754,64 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                 <button
                   onClick={() => setShowCreativesStatusPopup(false)}
                   disabled={loadingCreativesAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center"></div>
+                  <span className="text-gray-900">Abbrechen</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Ad Insights Status Selection Popup */}
+      {showInsightsStatusPopup && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setShowInsightsStatusPopup(false)}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div
+              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 min-w-64 max-h-60 overflow-y-auto"
+              style={{ backgroundColor: 'white' }}
+            >
+              <div className="p-2" style={{ backgroundColor: 'white' }}>
+                <button
+                  onClick={() => handleAbfrageInsights('all')}
+                  disabled={loadingInsightsAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    {loadingInsightsAbfrage ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
+                    ) : null}
+                  </div>
+                  <span className="text-gray-900">Alle Ads</span>
+                </button>
+                <button
+                  onClick={() => handleAbfrageInsights('active')}
+                  disabled={loadingInsightsAbfrage}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    {loadingInsightsAbfrage ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
+                    ) : null}
+                  </div>
+                  <span className="text-gray-900">Nur aktive Ads</span>
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                <button
+                  onClick={() => setShowInsightsStatusPopup(false)}
+                  disabled={loadingInsightsAbfrage}
                   className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
                   style={{ backgroundColor: 'white' }}
                 >

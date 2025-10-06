@@ -92,14 +92,18 @@ export interface AdInsight {
   ad_set_id: number | null;
   campaign_id: number | null;
   date: string;
+  ad_name: string | null;
   impressions: number | null;
   clicks: number | null;
   spend: number | null;
   ctr: number | null;
   cpm: number | null;
   cpc: number | null;
+  cpp: number | null;
   reach: number | null;
   frequency: number | null;
+  conversions: number | null;
+  attribution_setting: string | null;
 }
 
 export interface DailyAggregatedMetrics {

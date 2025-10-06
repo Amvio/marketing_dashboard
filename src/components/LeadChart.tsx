@@ -10,13 +10,14 @@ interface LeadChartProps {
     value: number;
     chartData: number[];
   }>;
+  changelogEntries?: Array<{ date: string; title: string }>;
 }
 
-export const LeadChart: React.FC<LeadChartProps> = ({ data, metricsData }) => {
+export const LeadChart: React.FC<LeadChartProps> = ({ data, metricsData, changelogEntries = [] }) => {
   const [selectedMetric1, setSelectedMetric1] = useState(metricsData[0]?.id || 'leads');
   const [selectedMetric2, setSelectedMetric2] = useState(metricsData[1]?.id || 'linkClicks');
   const [hoveredPoint, setHoveredPoint] = useState<{ index: number; x: number; y: number } | null>(null);
-  
+
   const currentMetric1 = metricsData.find(m => m.id === selectedMetric1) || metricsData[0];
   const currentMetric2 = metricsData.find(m => m.id === selectedMetric2) || metricsData[1];
   const chartData1 = currentMetric1?.chartData || data.map(d => d.leads);
@@ -223,7 +224,33 @@ export const LeadChart: React.FC<LeadChartProps> = ({ data, metricsData }) => {
                 className="drop-shadow-sm"
                style={{ strokeLinejoin: 'round', strokeLinecap: 'round' }}
               />
-              
+
+              {/* Changelog vertical lines */}
+              {changelogEntries.map((entry, idx) => {
+                const dateIndex = data.findIndex(d => d.date === entry.date);
+                if (dateIndex === -1) {
+                  console.log('Date not found in chart:', entry.date);
+                  return null;
+                }
+
+                const stepX = data.length > 1 ? 100 / (data.length - 1) : 50;
+                const xPosition = dateIndex * stepX;
+
+                return (
+                  <line
+                    key={idx}
+                    x1={xPosition}
+                    y1="0"
+                    x2={xPosition}
+                    y2="100"
+                    stroke="#dc2626"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                    className="drop-shadow-sm"
+                  />
+                );
+              })}
+
               {/* Invisible overlay for better hover detection */}
               <rect
                 x="0"
@@ -234,17 +261,52 @@ export const LeadChart: React.FC<LeadChartProps> = ({ data, metricsData }) => {
                 style={{ cursor: 'crosshair' }}
               />
             </svg>
+
+            {/* Changelog labels as HTML - positioned absolutely */}
+            {changelogEntries.map((entry, idx) => {
+              const dateIndex = data.findIndex(d => d.date === entry.date);
+              if (dateIndex === -1) return null;
+
+              const stepX = data.length > 1 ? 100 / (data.length - 1) : 50;
+              const xPosition = dateIndex * stepX;
+
+              return (
+                <div
+                  key={idx}
+                  className="absolute text-xs font-medium text-red-600 whitespace-nowrap"
+                  style={{
+                    left: `${xPosition}%`,
+                    top: '-24px',
+                    transform: 'translateX(-50%)',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  {entry.title}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
-      
+
       {/* X-axis labels completely outside and below the chart */}
-      <div className="mt-6 mx-8 flex justify-between text-xs text-gray-500">
-        {data.map((point, index) => (
-          <span key={index} className="transform -rotate-45 origin-left whitespace-nowrap">
-            {point.date}
-          </span>
-        ))}
+      <div className="mt-8 ml-12 mr-16 relative h-16">
+        {data.map((point, index) => {
+          const percentage = data.length > 1 ? (index / (data.length - 1)) * 100 : 50;
+          return (
+            <span
+              key={index}
+              className="absolute text-[10px] text-gray-500 whitespace-nowrap origin-top-left"
+              style={{
+                left: `${percentage}%`,
+                transform: 'rotate(-45deg) translateX(-50%)',
+                transformOrigin: 'top left'
+              }}
+            >
+              {point.date}
+            </span>
+          );
+        })}
       </div>
       
       {/* Tooltip */}
@@ -271,11 +333,12 @@ export const LeadChart: React.FC<LeadChartProps> = ({ data, metricsData }) => {
               </div>
             </div>
           </div>
-          <div 
+          <div
             className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"
           />
         </div>
       )}
+
     </div>
   );
 };
