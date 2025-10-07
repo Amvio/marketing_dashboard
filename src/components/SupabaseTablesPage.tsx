@@ -26,6 +26,9 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [showAdsetStatusPopup, setShowAdsetStatusPopup] = useState(false);
   const [showCreativesStatusPopup, setShowCreativesStatusPopup] = useState(false);
   const [showInsightsStatusPopup, setShowInsightsStatusPopup] = useState(false);
+  const [insightsStartDate, setInsightsStartDate] = useState<string>('');
+  const [insightsEndDate, setInsightsEndDate] = useState<string>('');
+  const [loadingInsightsDateInit, setLoadingInsightsDateInit] = useState(false);
 
   // Standalone handler for ad_accounts Abfrage
   const handleAbfrageAdAccounts = async () => {
@@ -249,15 +252,71 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     }
   };
 
-  // Standalone handler for ad insights Abfrage
-  const handleAbfrageInsights = async (statusFilter: 'active' | 'all') => {
-    setLoadingInsightsAbfrage(true);
-    setShowInsightsStatusPopup(false);
-    addConsoleMessage?.(`Calling Netlify function for ad insights with status filter: ${statusFilter}...`);
+  const initializeInsightsDates = async () => {
+    setLoadingInsightsDateInit(true);
+    addConsoleMessage?.('Initializing insights date range...');
 
     try {
-      console.log(`Calling Netlify function for ad insights with status filter: ${statusFilter}...`);
-      const response = await fetch(`/api/get_ad_insights${statusFilter === 'active' ? '?statusFilter=active' : ''}`, {
+      const { data: latestInsight, error: latestInsightError } = await supabase
+        .from('ad_insights')
+        .select('date')
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let defaultStartDate: string;
+      if (latestInsight && latestInsight.date) {
+        defaultStartDate = latestInsight.date;
+        console.log(`Found latest date in ad_insights: ${defaultStartDate}`);
+        addConsoleMessage?.(`Latest insight date: ${defaultStartDate}`);
+      } else {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        defaultStartDate = thirtyDaysAgo.toISOString().split('T')[0];
+        console.log(`No data found in ad_insights, using default: ${defaultStartDate}`);
+        addConsoleMessage?.(`No existing data found, default start date: ${defaultStartDate}`);
+      }
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const defaultEndDate = yesterday.toISOString().split('T')[0];
+
+      setInsightsStartDate(defaultStartDate);
+      setInsightsEndDate(defaultEndDate);
+      addConsoleMessage?.(`Date range initialized: ${defaultStartDate} to ${defaultEndDate}`);
+    } catch (error) {
+      console.error('Error initializing dates:', error);
+      addConsoleMessage?.(`Error initializing dates: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      setInsightsStartDate(thirtyDaysAgo.toISOString().split('T')[0]);
+      setInsightsEndDate(yesterday.toISOString().split('T')[0]);
+    } finally {
+      setLoadingInsightsDateInit(false);
+    }
+  };
+
+  const handleAbfrageInsights = async () => {
+    if (!insightsStartDate || !insightsEndDate) {
+      addConsoleMessage?.('Error: Start date and end date are required');
+      return;
+    }
+
+    if (new Date(insightsStartDate) > new Date(insightsEndDate)) {
+      addConsoleMessage?.('Error: Start date cannot be after end date');
+      return;
+    }
+
+    setLoadingInsightsAbfrage(true);
+    setShowInsightsStatusPopup(false);
+    addConsoleMessage?.(`Calling Netlify function for ad insights from ${insightsStartDate} to ${insightsEndDate}...`);
+
+    try {
+      console.log(`Calling Netlify function for ad insights from ${insightsStartDate} to ${insightsEndDate}...`);
+      const response = await fetch(`/api/get_ad_insights?startDate=${insightsStartDate}&endDate=${insightsEndDate}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -283,7 +342,6 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       console.log('Netlify function response:', data);
       addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
 
-      // Refresh the ad_insights table data after successful sync
       await fetchTableData('ad_insights');
       addConsoleMessage?.('Ad insights table refreshed after sync');
     } catch (error) {
@@ -546,7 +604,10 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                           )}
                           {tableName === 'ad_insights' && (
                             <button
-                              onClick={() => setShowInsightsStatusPopup(true)}
+                              onClick={() => {
+                                setShowInsightsStatusPopup(true);
+                                initializeInsightsDates();
+                              }}
                               disabled={loadingInsightsAbfrage}
                               className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
                               title="Ad Insights von Meta API abrufen"
@@ -766,7 +827,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
         </>
       )}
 
-      {/* Ad Insights Status Selection Popup */}
+      {/* Ad Insights Date Range Picker Popup */}
       {showInsightsStatusPopup && (
         <>
           {/* Backdrop */}
@@ -776,48 +837,87 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
-              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 min-w-64 max-h-60 overflow-y-auto"
+              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 w-full max-w-md"
               style={{ backgroundColor: 'white' }}
             >
-              <div className="p-2" style={{ backgroundColor: 'white' }}>
-                <button
-                  onClick={() => handleAbfrageInsights('all')}
-                  disabled={loadingInsightsAbfrage}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
-                  style={{ backgroundColor: 'white' }}
-                >
-                  <div className="w-4 h-4 flex items-center justify-center">
-                    {loadingInsightsAbfrage ? (
-                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
-                    ) : null}
+              <div className="p-6" style={{ backgroundColor: 'white' }}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Ad Insights Zeitraum wählen
+                </h3>
+
+                {loadingInsightsDateInit ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">Lade Datumswerte...</span>
                   </div>
-                  <span className="text-gray-900">Alle Ads</span>
-                </button>
-                <button
-                  onClick={() => handleAbfrageInsights('active')}
-                  disabled={loadingInsightsAbfrage}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
-                  style={{ backgroundColor: 'white' }}
-                >
-                  <div className="w-4 h-4 flex items-center justify-center">
-                    {loadingInsightsAbfrage ? (
-                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
-                    ) : null}
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="insights-start-date" className="block text-sm font-medium text-gray-700 mb-2">
+                        Startdatum
+                      </label>
+                      <input
+                        id="insights-start-date"
+                        type="date"
+                        value={insightsStartDate}
+                        onChange={(e) => setInsightsStartDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="insights-end-date" className="block text-sm font-medium text-gray-700 mb-2">
+                        Enddatum
+                      </label>
+                      <input
+                        id="insights-end-date"
+                        type="date"
+                        value={insightsEndDate}
+                        onChange={(e) => setInsightsEndDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {insightsStartDate && insightsEndDate && new Date(insightsStartDate) > new Date(insightsEndDate) && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-800">
+                          Startdatum kann nicht nach dem Enddatum liegen.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex space-x-3 mt-6">
+                      <button
+                        onClick={handleAbfrageInsights}
+                        disabled={
+                          loadingInsightsAbfrage ||
+                          !insightsStartDate ||
+                          !insightsEndDate ||
+                          new Date(insightsStartDate) > new Date(insightsEndDate)
+                        }
+                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                      >
+                        {loadingInsightsAbfrage ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Lädt...</span>
+                          </>
+                        ) : (
+                          <span>Abrufen</span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setShowInsightsStatusPopup(false)}
+                        disabled={loadingInsightsAbfrage}
+                        className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Abbrechen
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-gray-900">Nur aktive Ads</span>
-                </button>
-                <div className="border-t border-gray-100 my-1"></div>
-                <button
-                  onClick={() => setShowInsightsStatusPopup(false)}
-                  disabled={loadingInsightsAbfrage}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
-                  style={{ backgroundColor: 'white' }}
-                >
-                  <div className="w-4 h-4 flex items-center justify-center"></div>
-                  <span className="text-gray-900">Abbrechen</span>
-                </button>
+                )}
               </div>
             </div>
           </div>

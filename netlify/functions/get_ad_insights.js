@@ -71,76 +71,48 @@ exports.handler = async (event, context) => {
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     const queryParams = event.queryStringParameters || {};
-    const statusFilter = queryParams.statusFilter;
+    const startDate = queryParams.startDate;
+    const endDate = queryParams.endDate;
 
-    console.log('Step 1: Finding the newest date entry in ad_insights table...');
-
-    const { data: latestInsight, error: latestInsightError } = await supabase
-      .from('ad_insights')
-      .select('date')
-      .order('date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (latestInsightError) {
-      console.error('Error fetching latest insight:', latestInsightError);
-    }
-
-    let startDate;
-    if (latestInsight && latestInsight.date) {
-      const latestDate = new Date(latestInsight.date);
-      latestDate.setDate(latestDate.getDate() + 1);
-      startDate = latestDate.toISOString().split('T')[0];
-      console.log(`Found latest date: ${latestInsight.date}, starting from: ${startDate}`);
-    } else {
-      const defaultStart = new Date();
-      defaultStart.setDate(defaultStart.getDate() - 30);
-      startDate = defaultStart.toISOString().split('T')[0];
-      console.log(`No data found in ad_insights, using default start date: ${startDate}`);
-    }
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const endDate = yesterday.toISOString().split('T')[0];
-
-    console.log(`Date range: ${startDate} to ${endDate}`);
-
-    if (new Date(startDate) > new Date(endDate)) {
-      console.log('Start date is after end date, no new data to fetch');
+    if (!startDate || !endDate) {
+      console.error('Missing required date parameters');
       return {
-        statusCode: 200,
+        statusCode: 400,
         headers: {
           ...headers,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: 'No new data to fetch. Database is up to date.',
-          source: 'Meta Graph API',
-          timestamp: new Date().toISOString(),
-          statusFilter: statusFilter || 'all',
-          dateRange: { startDate, endDate },
-          totalCount: 0,
-          supabaseSync: {
-            processed: 0,
-            errors: 0,
-            errorDetails: []
-          }
+          error: 'Bad Request',
+          message: 'Both startDate and endDate query parameters are required (format: YYYY-MM-DD).',
         }),
       };
     }
 
-    console.log('Step 2: Fetching ad IDs from Supabase ads table...');
+    console.log(`Date range: ${startDate} to ${endDate}`);
 
-    let adsQuery = supabase
+    if (new Date(startDate) > new Date(endDate)) {
+      console.log('Start date is after end date');
+      return {
+        statusCode: 400,
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          error: 'Bad Request',
+          message: 'Start date cannot be after end date.',
+          dateRange: { startDate, endDate }
+        }),
+      };
+    }
+
+    console.log('Step 1: Fetching ad IDs from Supabase ads table...');
+
+    const { data: adsData, error: adsError } = await supabase
       .from('ads')
       .select('id')
       .order('id', { ascending: true });
-
-    if (statusFilter === 'active') {
-      adsQuery = adsQuery.eq('status', 'ACTIVE');
-    }
-
-    const { data: adsData, error: adsError } = await adsQuery;
 
     if (adsError) {
       console.error('Error fetching ads from Supabase:', adsError);
@@ -157,7 +129,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    console.log(`Found ${(adsData || []).length} ads in Supabase${statusFilter === 'active' ? ' (active only)' : ''}`);
+    console.log(`Found ${(adsData || []).length} ads in Supabase`);
 
     if (!adsData || adsData.length === 0) {
       return {
@@ -170,7 +142,7 @@ exports.handler = async (event, context) => {
           message: 'No ads found in database to fetch insights for',
           source: 'Meta Graph API',
           timestamp: new Date().toISOString(),
-          statusFilter: statusFilter || 'all',
+          dateRange: { startDate, endDate },
           totalCount: 0,
           supabaseSync: {
             processed: 0,
@@ -181,7 +153,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    console.log('Step 3: Fetching insights for each ad from Meta Graph API...');
+    console.log('Step 2: Fetching insights for each ad from Meta Graph API...');
 
     let allInsightsData = [];
     let apiErrors = [];
@@ -236,7 +208,7 @@ exports.handler = async (event, context) => {
 
     console.log(`Fetched ${allInsightsData.length} total insight records from Meta Graph API`);
 
-    console.log('Step 4: Upserting insights to Supabase...');
+    console.log('Step 3: Upserting insights to Supabase...');
 
     let upsertResults = {
       processed: 0,
@@ -305,7 +277,6 @@ exports.handler = async (event, context) => {
         message: 'Ad insights fetched successfully from Meta Graph API',
         source: 'Meta Graph API',
         timestamp: new Date().toISOString(),
-        statusFilter: statusFilter || 'all',
         dateRange: { startDate, endDate },
         totalCount: allInsightsData.length,
         adsQueried: adsData.length,
