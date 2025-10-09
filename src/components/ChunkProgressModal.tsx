@@ -44,8 +44,8 @@ export const ChunkProgressModal: React.FC<ChunkProgressModalProps> = ({
       />
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white border border-gray-300 rounded-lg shadow-xl w-full max-w-lg">
-          <div className="p-6">
+        <div className="bg-white border border-gray-300 rounded-lg shadow-xl w-full max-w-lg" style={{ backgroundColor: 'white' }}>
+          <div className="p-6" style={{ backgroundColor: 'white' }}>
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center space-x-3">
                 {status === 'processing' && (

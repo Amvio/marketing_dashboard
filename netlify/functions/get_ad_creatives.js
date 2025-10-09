@@ -193,7 +193,7 @@ exports.handler = async (event, context) => {
 
     // Process and upsert ad creatives to Supabase
     let upsertResults = {
-      process ed: 0,
+      processed: 0,
       errors: []
     };
 

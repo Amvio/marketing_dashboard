@@ -25,6 +25,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loadingAdsAbfrage, setLoadingAdsAbfrage] = useState(false);
   const [loadingCreativesAbfrage, setLoadingCreativesAbfrage] = useState(false);
   const [loadingCreativeImagesAbfrage, setLoadingCreativeImagesAbfrage] = useState(false);
+  const [loadingCustomersLeadtableAbfrage, setLoadingCustomersLeadtableAbfrage] = useState(false);
   const [loadingInsightsAbfrage, setLoadingInsightsAbfrage] = useState(false);
   const [showAdsetStatusPopup, setShowAdsetStatusPopup] = useState(false);
   const [showCreativesStatusPopup, setShowCreativesStatusPopup] = useState(false);
@@ -252,6 +253,50 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
 
     fetchAdAccounts();
   }, []);
+
+  // Handler for fetching customers leadtable
+  const handleAbfrageCustomersLeadtable = async () => {
+    setLoadingCustomersLeadtableAbfrage(true);
+    addConsoleMessage?.('Calling Netlify function for customers_leadtable...');
+
+    try {
+      console.log('Calling Netlify function for customers_leadtable...');
+      const response = await fetch('/api/get_customers_leadtable', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Netlify function response:', data);
+      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+
+      // Refresh the customers_leadtable table data after successful sync
+      await fetchTableData('customers_leadtable');
+      addConsoleMessage?.('Customers leadtable refreshed after sync');
+    } catch (error) {
+      console.error('Error calling Netlify function:', error);
+      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingCustomersLeadtableAbfrage(false);
+    }
+  };
 
   // Handler for fetching creative images by hash
   const handleAbfrageCreativeImages = async () => {
@@ -624,6 +669,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     'ad_insights',
     'Kunden',
     'customer_tasks',
+    'customers_leadtable',
     'dashboard_users',
     'campaigns',
     'ad_accounts',
@@ -791,6 +837,21 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                               title="Ad Accounts von Meta API abrufen"
                             >
                               {loadingAdAccountsAbfrage ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                              ) : (
+                                <Search className="w-3 h-3" />
+                              )}
+                              <span>Abfrage</span>
+                            </button>
+                          )}
+                          {tableName === 'customers_leadtable' && (
+                            <button
+                              onClick={handleAbfrageCustomersLeadtable}
+                              disabled={loadingCustomersLeadtableAbfrage}
+                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                              title="Customers Leadtable Daten abrufen"
+                            >
+                              {loadingCustomersLeadtableAbfrage ? (
                                 <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
                               ) : (
                                 <Search className="w-3 h-3" />
