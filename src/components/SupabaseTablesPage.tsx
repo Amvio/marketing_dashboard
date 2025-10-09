@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Database, ArrowLeft, Table, Eye, CheckCircle, XCircle, RefreshCw, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { chunkDateRange, DateChunk } from '../utils/chunkUtils';
+import { ChunkProgressModal } from './ChunkProgressModal';
 
 interface SupabaseTablesPageProps {
   onBack: () => void;
@@ -22,13 +24,32 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loadingAdsetsAbfrage, setLoadingAdsetsAbfrage] = useState(false);
   const [loadingAdsAbfrage, setLoadingAdsAbfrage] = useState(false);
   const [loadingCreativesAbfrage, setLoadingCreativesAbfrage] = useState(false);
+  const [loadingCreativeImagesAbfrage, setLoadingCreativeImagesAbfrage] = useState(false);
   const [loadingInsightsAbfrage, setLoadingInsightsAbfrage] = useState(false);
   const [showAdsetStatusPopup, setShowAdsetStatusPopup] = useState(false);
   const [showCreativesStatusPopup, setShowCreativesStatusPopup] = useState(false);
+  const [showCreativeImagesPopup, setShowCreativeImagesPopup] = useState(false);
+  const [selectedAdAccountId, setSelectedAdAccountId] = useState<string>('');
+  const [adAccounts, setAdAccounts] = useState<any[]>([]);
   const [showInsightsStatusPopup, setShowInsightsStatusPopup] = useState(false);
   const [insightsStartDate, setInsightsStartDate] = useState<string>('');
   const [insightsEndDate, setInsightsEndDate] = useState<string>('');
   const [loadingInsightsDateInit, setLoadingInsightsDateInit] = useState(false);
+  const [insightsStatusFilter, setInsightsStatusFilter] = useState<'active' | 'all'>('all');
+  const [chunkProgressModal, setChunkProgressModal] = useState({
+    isOpen: false,
+    currentChunk: 0,
+    totalChunks: 0,
+    chunkStartDate: '',
+    chunkEndDate: '',
+    overallStartDate: '',
+    overallEndDate: '',
+    itemsProcessed: 0,
+    status: 'processing' as 'processing' | 'completed' | 'error' | 'timeout',
+    errorMessage: '',
+  });
+  const [cancelChunking, setCancelChunking] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
 
   // Standalone handler for ad_accounts Abfrage
   const handleAbfrageAdAccounts = async () => {
@@ -207,6 +228,84 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     }
   };
 
+  // Fetch ad accounts for dropdown
+  useEffect(() => {
+    const fetchAdAccounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('ad_accounts')
+          .select('id, name')
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching ad accounts:', error);
+        } else {
+          setAdAccounts(data || []);
+          if (data && data.length > 0) {
+            setSelectedAdAccountId(data[0].id.replace('act_', ''));
+          }
+        }
+      } catch (err) {
+        console.error('Exception fetching ad accounts:', err);
+      }
+    };
+
+    fetchAdAccounts();
+  }, []);
+
+  // Handler for fetching creative images by hash
+  const handleAbfrageCreativeImages = async () => {
+    if (!selectedAdAccountId) {
+      addConsoleMessage?.('Please select an ad account first');
+      return;
+    }
+
+    setLoadingCreativeImagesAbfrage(true);
+    setShowCreativeImagesPopup(false);
+    addConsoleMessage?.(`Fetching creative images for ad account ${selectedAdAccountId}...`);
+
+    try {
+      console.log(`Calling fetch_creative_images function for ad account: ${selectedAdAccountId}...`);
+      const response = await fetch('/api/fetch_creative_images', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adAccountId: selectedAdAccountId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Fetch creative images response:', data);
+      addConsoleMessage?.(`Fetch creative images completed: ${data.processed} creatives updated, ${data.errors} errors`);
+
+      // Refresh the ad_creatives table data after successful fetch
+      await fetchTableData('ad_creatives');
+      addConsoleMessage?.('Ad creatives table refreshed after image fetch');
+    } catch (error) {
+      console.error('Error calling fetch_creative_images:', error);
+      addConsoleMessage?.(`Error calling fetch_creative_images: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingCreativeImagesAbfrage(false);
+    }
+  };
+
   // Standalone handler for ad creatives Abfrage
   const handleAbfrageCreatives = async (statusFilter: 'active' | 'all') => {
     setLoadingCreativesAbfrage(true);
@@ -312,43 +411,200 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
 
     setLoadingInsightsAbfrage(true);
     setShowInsightsStatusPopup(false);
-    addConsoleMessage?.(`Calling Netlify function for ad insights from ${insightsStartDate} to ${insightsEndDate}...`);
+    setCancelChunking(false);
+    addConsoleMessage?.(`Starting chunked insights fetch from ${insightsStartDate} to ${insightsEndDate} (${insightsStatusFilter})...`);
 
     try {
-      console.log(`Calling Netlify function for ad insights from ${insightsStartDate} to ${insightsEndDate}...`);
-      const response = await fetch(`/api/get_ad_insights?startDate=${insightsStartDate}&endDate=${insightsEndDate}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const { chunks, totalChunks } = chunkDateRange(insightsStartDate, insightsEndDate, 3);
+      console.log(`Date range split into ${totalChunks} chunks of 3 days each`);
+      addConsoleMessage?.(`Date range split into ${totalChunks} chunks`);
+
+      const jobData = {
+        job_type: 'ad_insights',
+        status: 'running',
+        total_chunks: totalChunks,
+        completed_chunks: 0,
+        current_chunk: 1,
+        start_date: insightsStartDate,
+        end_date: insightsEndDate,
+        current_chunk_start: chunks[0].startDate,
+        current_chunk_end: chunks[0].endDate,
+        total_items_processed: 0,
+        metadata: JSON.stringify({ statusFilter: insightsStatusFilter })
+      };
+
+      const { data: job, error: jobError } = await supabase
+        .from('sync_jobs')
+        .insert(jobData)
+        .select()
+        .single();
+
+      if (jobError) {
+        console.error('Error creating sync job:', jobError);
+        addConsoleMessage?.(`Error creating sync job: ${jobError.message}`);
+        return;
+      }
+
+      setCurrentJobId(job.id);
+
+      setChunkProgressModal({
+        isOpen: true,
+        currentChunk: 0,
+        totalChunks,
+        chunkStartDate: chunks[0].startDate,
+        chunkEndDate: chunks[0].endDate,
+        overallStartDate: insightsStartDate,
+        overallEndDate: insightsEndDate,
+        itemsProcessed: 0,
+        status: 'processing',
+        errorMessage: ''
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Netlify function error:', errorText);
-        addConsoleMessage?.(`Netlify function error: ${errorText}`);
-        return;
+      let totalItemsProcessed = 0;
+      let hasTimeout = false;
+
+      for (let i = 0; i < chunks.length; i++) {
+        if (cancelChunking) {
+          console.log('Chunking cancelled by user');
+          addConsoleMessage?.('Chunking cancelled by user');
+          await supabase
+            .from('sync_jobs')
+            .update({ status: 'paused', updated_at: new Date().toISOString() })
+            .eq('id', job.id);
+          break;
+        }
+
+        const chunk = chunks[i];
+        console.log(`Processing chunk ${i + 1}/${totalChunks}: ${chunk.startDate} to ${chunk.endDate}`);
+        addConsoleMessage?.(`Processing chunk ${i + 1}/${totalChunks}: ${chunk.startDate} to ${chunk.endDate}`);
+
+        setChunkProgressModal(prev => ({
+          ...prev,
+          currentChunk: i + 1,
+          chunkStartDate: chunk.startDate,
+          chunkEndDate: chunk.endDate
+        }));
+
+        await supabase
+          .from('sync_jobs')
+          .update({
+            current_chunk: i + 1,
+            current_chunk_start: chunk.startDate,
+            current_chunk_end: chunk.endDate,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', job.id);
+
+        try {
+          const statusParam = insightsStatusFilter === 'active' ? '&statusFilter=active' : '';
+          const response = await fetch(
+            `/api/get_ad_insights?startDate=${chunk.startDate}&endDate=${chunk.endDate}${statusParam}&jobId=${job.id}`,
+            {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json' }
+            }
+          );
+
+          if (!response.ok && response.status !== 206) {
+            const errorText = await response.text();
+            console.error('Netlify function error:', errorText);
+            addConsoleMessage?.(`Netlify function error: ${errorText}`);
+            throw new Error(errorText);
+          }
+
+          const data = await response.json();
+          console.log(`Chunk ${i + 1} response:`, data);
+          addConsoleMessage?.(`Chunk ${i + 1} completed: ${data.supabaseSync?.processed || 0} items`);
+
+          totalItemsProcessed += data.supabaseSync?.processed || 0;
+
+          if (data.timeout?.occurred) {
+            hasTimeout = true;
+            console.log('Timeout detected in chunk response');
+            addConsoleMessage?.(`Timeout detected in chunk ${i + 1}: ${data.message}`);
+
+            setChunkProgressModal(prev => ({
+              ...prev,
+              status: 'timeout',
+              itemsProcessed: totalItemsProcessed,
+              errorMessage: data.message || 'Function timed out during processing'
+            }));
+          } else {
+            setChunkProgressModal(prev => ({
+              ...prev,
+              itemsProcessed: totalItemsProcessed
+            }));
+          }
+
+          await supabase
+            .from('sync_jobs')
+            .update({
+              completed_chunks: i + 1,
+              total_items_processed: totalItemsProcessed,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', job.id);
+
+          if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (chunkError) {
+          console.error(`Error processing chunk ${i + 1}:`, chunkError);
+          addConsoleMessage?.(`Error in chunk ${i + 1}: ${chunkError instanceof Error ? chunkError.message : 'Unknown error'}`);
+
+          await supabase
+            .from('sync_jobs')
+            .update({
+              status: 'failed',
+              error_message: chunkError instanceof Error ? chunkError.message : 'Unknown error',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', job.id);
+
+          setChunkProgressModal(prev => ({
+            ...prev,
+            status: 'error',
+            errorMessage: chunkError instanceof Error ? chunkError.message : 'Unknown error'
+          }));
+
+          return;
+        }
       }
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await response.text();
-        console.error('Non-JSON response:', responseText);
-        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
-        return;
-      }
+      if (!cancelChunking && !hasTimeout) {
+        await supabase
+          .from('sync_jobs')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', job.id);
 
-      const data = await response.json();
-      console.log('Netlify function response:', data);
-      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+        setChunkProgressModal(prev => ({
+          ...prev,
+          status: 'completed',
+          itemsProcessed: totalItemsProcessed
+        }));
+
+        console.log(`All chunks completed. Total items processed: ${totalItemsProcessed}`);
+        addConsoleMessage?.(`All chunks completed successfully! Total items: ${totalItemsProcessed}`);
+      }
 
       await fetchTableData('ad_insights');
       addConsoleMessage?.('Ad insights table refreshed after sync');
     } catch (error) {
-      console.error('Error calling Netlify function:', error);
-      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error in chunked insights fetch:', error);
+      addConsoleMessage?.(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+      setChunkProgressModal(prev => ({
+        ...prev,
+        status: 'error',
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      }));
     } finally {
       setLoadingInsightsAbfrage(false);
+      setCurrentJobId(null);
     }
   };
   const refreshAllTables = async () => {
@@ -588,19 +844,34 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                             </button>
                           )}
                           {tableName === 'ad_creatives' && (
-                            <button
-                              onClick={() => setShowCreativesStatusPopup(true)}
-                              disabled={loadingCreativesAbfrage}
-                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
-                              title="Ad Creatives von Meta API abrufen"
-                            >
-                              {loadingCreativesAbfrage ? (
-                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
-                              ) : (
-                                <Search className="w-3 h-3" />
-                              )}
-                              <span>Abfrage</span>
-                            </button>
+                            <>
+                              <button
+                                onClick={() => setShowCreativesStatusPopup(true)}
+                                disabled={loadingCreativesAbfrage}
+                                className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                                title="Ad Creatives von Meta API abrufen"
+                              >
+                                {loadingCreativesAbfrage ? (
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                                ) : (
+                                  <Search className="w-3 h-3" />
+                                )}
+                                <span>Abfrage</span>
+                              </button>
+                              <button
+                                onClick={() => setShowCreativeImagesPopup(true)}
+                                disabled={loadingCreativeImagesAbfrage}
+                                className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded transition-colors duration-150 disabled:opacity-50"
+                                title="Creative Images von Meta API mit Hash abrufen"
+                              >
+                                {loadingCreativeImagesAbfrage ? (
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b border-green-700"></div>
+                                ) : (
+                                  <Search className="w-3 h-3" />
+                                )}
+                                <span>Abfrage Creative</span>
+                              </button>
+                            </>
                           )}
                           {tableName === 'ad_insights' && (
                             <button
@@ -827,6 +1098,60 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
         </>
       )}
 
+      {/* Creative Images Ad Account Selector Popup */}
+      {showCreativeImagesPopup && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setShowCreativeImagesPopup(false)}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div
+              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 p-6"
+              style={{ minWidth: '300px', backgroundColor: 'white' }}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Ad Account</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ad Account
+                </label>
+                <select
+                  value={selectedAdAccountId}
+                  onChange={(e) => setSelectedAdAccountId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{ backgroundColor: 'white' }}
+                >
+                  {adAccounts.map((account) => (
+                    <option key={account.id} value={account.id.replace('act_', '')}>
+                      {account.name} ({account.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleAbfrageCreativeImages}
+                  disabled={loadingCreativeImagesAbfrage || !selectedAdAccountId}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingCreativeImagesAbfrage ? 'Loading...' : 'Fetch Images'}
+                </button>
+                <button
+                  onClick={() => setShowCreativeImagesPopup(false)}
+                  disabled={loadingCreativeImagesAbfrage}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors duration-150 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Ad Insights Date Range Picker Popup */}
       {showInsightsStatusPopup && (
         <>
@@ -880,6 +1205,34 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                       />
                     </div>
 
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ad Status
+                      </label>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setInsightsStatusFilter('all')}
+                          className={`flex-1 px-4 py-2 rounded-lg transition-colors duration-150 ${
+                            insightsStatusFilter === 'all'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          Alle Ads
+                        </button>
+                        <button
+                          onClick={() => setInsightsStatusFilter('active')}
+                          className={`flex-1 px-4 py-2 rounded-lg transition-colors duration-150 ${
+                            insightsStatusFilter === 'active'
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          Nur aktive Ads
+                        </button>
+                      </div>
+                    </div>
+
                     {insightsStartDate && insightsEndDate && new Date(insightsStartDate) > new Date(insightsEndDate) && (
                       <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                         <p className="text-sm text-red-800">
@@ -923,6 +1276,23 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
           </div>
         </>
       )}
+
+      {/* Chunk Progress Modal */}
+      <ChunkProgressModal
+        isOpen={chunkProgressModal.isOpen}
+        onClose={() => setChunkProgressModal(prev => ({ ...prev, isOpen: false }))}
+        currentChunk={chunkProgressModal.currentChunk}
+        totalChunks={chunkProgressModal.totalChunks}
+        chunkStartDate={chunkProgressModal.chunkStartDate}
+        chunkEndDate={chunkProgressModal.chunkEndDate}
+        overallStartDate={chunkProgressModal.overallStartDate}
+        overallEndDate={chunkProgressModal.overallEndDate}
+        itemsProcessed={chunkProgressModal.itemsProcessed}
+        status={chunkProgressModal.status}
+        errorMessage={chunkProgressModal.errorMessage}
+        canCancel={chunkProgressModal.status === 'processing'}
+        onCancel={() => setCancelChunking(true)}
+      />
     </div>
   );
 };

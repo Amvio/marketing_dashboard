@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { SupabaseTablesPage } from './components/SupabaseTablesPage';
 import { SupabaseCustomersPage } from './components/SupabaseCustomersPage';
 import { SupabaseCustomerCampaignsPage } from './components/SupabaseCustomerCampaignsPage';
+import { DefinitionsPage } from './components/DefinitionsPage';
 import { MetricCard } from './components/MetricCard';
 import { LeadChart } from './components/LeadChart';
 import { AdPerformanceTable } from './components/AdPerformanceTable';
@@ -12,7 +13,7 @@ import { TaskManager } from './components/TaskManager';
 import { ChangelogManager } from './components/ChangelogManager';
 import { formatDateRange, getPreviousPeriodDateRange, getAggregatedMetricsForPeriod, generateDateRange, getDailyAggregatedChartData } from './utils/dateUtils';
 import { Customer, Adset, Task, Campaign, Ad, AdInsight } from './types/dashboard';
-import { MousePointer2, Eye, BarChart3, Users, ExternalLink, UserPlus, MessageSquare, CreditCard as Edit3, DollarSign, Target, TrendingUp, Printer } from 'lucide-react';
+import { MousePointer2, Eye, BarChart3, Users, ExternalLink, UserPlus, MessageSquare, CreditCard as Edit3, DollarSign, Target, TrendingUp, Printer, Repeat, Euro } from 'lucide-react';
 
 function getLast7Days() {
   // Calculate current week (Monday to Sunday)
@@ -27,7 +28,7 @@ function getLast7Days() {
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'supabase-tables' | 'supabase-customers' | 'supabase-campaigns'>('dashboard');
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'supabase-tables' | 'supabase-customers' | 'supabase-campaigns' | 'definitions'>('dashboard');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>([]);
   const [selectedAdIds, setSelectedAdIds] = useState<string[]>([]);
@@ -139,7 +140,8 @@ function App() {
       previousValue: previousMetrics.impressions,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-primary-blue',
-      icon: <Eye className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 1
     },
     {
       id: 'clicks',
@@ -148,16 +150,18 @@ function App() {
       previousValue: previousMetrics.clicks,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-secondary-blue',
-      icon: <MousePointer2 className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 2
     },
     {
       id: 'spend',
-      title: 'Ausgaben',
-      value: Math.round(currentMetrics.spend * 100) / 100, // Round to 2 decimal places
+      title: 'Ausgaben (€)',
+      value: Math.round(currentMetrics.spend * 100) / 100,
       previousValue: Math.round(previousMetrics.spend * 100) / 100,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-tertiary-blue',
-      icon: <DollarSign className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 3
     },
     {
       id: 'reach',
@@ -166,25 +170,48 @@ function App() {
       previousValue: previousMetrics.reach,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-primary-blue',
-      icon: <Users className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 4
     },
     {
       id: 'ctr',
       title: 'CTR (%)',
-      value: Math.round(currentMetrics.ctr * 100) / 100, // Round to 2 decimal places
+      value: Math.round(currentMetrics.ctr * 100) / 100,
       previousValue: Math.round(previousMetrics.ctr * 100) / 100,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-secondary-blue',
-      icon: <Target className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 5
     },
     {
       id: 'cpm',
       title: 'CPM (€)',
-      value: Math.round(currentMetrics.cpm * 100) / 100, // Round to 2 decimal places
+      value: Math.round(currentMetrics.cpm * 100) / 100,
       previousValue: Math.round(previousMetrics.cpm * 100) / 100,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-tertiary-blue',
-      icon: <TrendingUp className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 6
+    },
+    {
+      id: 'frequency',
+      title: 'Frequenz',
+      value: Math.round(currentMetrics.frequency * 100) / 100,
+      previousValue: Math.round(previousMetrics.frequency * 100) / 100,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-primary-blue',
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 7
+    },
+    {
+      id: 'cpc',
+      title: 'CPC (€)',
+      value: Math.round(currentMetrics.cpc * 100) / 100,
+      previousValue: Math.round(previousMetrics.cpc * 100) / 100,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-secondary-blue',
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 8
     },
     {
       id: 'leads',
@@ -193,7 +220,8 @@ function App() {
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-green-600',
-      icon: <UserPlus className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 9
     },
     {
       id: 'qualified-leads',
@@ -202,7 +230,8 @@ function App() {
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-green-700',
-      icon: <Users className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 10
     },
     {
       id: 'cost-per-lead',
@@ -211,7 +240,8 @@ function App() {
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-green-800',
-      icon: <DollarSign className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 11
     },
     {
       id: 'conversion-rate',
@@ -220,7 +250,8 @@ function App() {
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-green-600',
-      icon: <TrendingUp className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 12
     },
     {
       id: 'lead-quality',
@@ -229,7 +260,8 @@ function App() {
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-green-700',
-      icon: <Target className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 13
     },
     {
       id: 'follow-up-rate',
@@ -238,7 +270,8 @@ function App() {
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
       color: 'bg-green-800',
-      icon: <MessageSquare className="w-4 h-4" />
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 14
     }
   ]);
   // Fetch customers from Supabase
@@ -522,7 +555,8 @@ function App() {
         previousValue: updatedPreviousMetrics.impressions,
         chartData: dailyChartData.map(d => d.impressions),
         color: 'bg-primary-blue',
-        icon: <Eye className="w-4 h-4" />
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 1
       },
       {
         id: 'clicks',
@@ -531,16 +565,18 @@ function App() {
         previousValue: updatedPreviousMetrics.clicks,
         chartData: dailyChartData.map(d => d.clicks),
         color: 'bg-secondary-blue',
-        icon: <MousePointer2 className="w-4 h-4" />
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 2
       },
       {
         id: 'spend',
-        title: 'Ausgaben',
+        title: 'Ausgaben (€)',
         value: Math.round(updatedCurrentMetrics.spend * 100) / 100,
         previousValue: Math.round(updatedPreviousMetrics.spend * 100) / 100,
         chartData: dailyChartData.map(d => Math.round(d.spend * 100) / 100),
         color: 'bg-tertiary-blue',
-        icon: <DollarSign className="w-4 h-4" />
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 3
       },
       {
         id: 'reach',
@@ -549,7 +585,8 @@ function App() {
         previousValue: updatedPreviousMetrics.reach,
         chartData: dailyChartData.map(d => d.reach),
         color: 'bg-primary-blue',
-        icon: <Users className="w-4 h-4" />
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 4
       },
       {
         id: 'ctr',
@@ -558,7 +595,8 @@ function App() {
         previousValue: Math.round(updatedPreviousMetrics.ctr * 100) / 100,
         chartData: dailyChartData.map(d => Math.round(d.ctr * 100) / 100),
         color: 'bg-secondary-blue',
-        icon: <Target className="w-4 h-4" />
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 5
       },
       {
         id: 'cpm',
@@ -567,8 +605,29 @@ function App() {
         previousValue: Math.round(updatedPreviousMetrics.cpm * 100) / 100,
         chartData: dailyChartData.map(d => Math.round(d.cpm * 100) / 100),
         color: 'bg-tertiary-blue',
-        icon: <TrendingUp className="w-4 h-4" />
-       },
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 6
+      },
+      {
+        id: 'frequency',
+        title: 'Frequenz',
+        value: Math.round(updatedCurrentMetrics.frequency * 100) / 100,
+        previousValue: Math.round(updatedPreviousMetrics.frequency * 100) / 100,
+        chartData: dailyChartData.map(d => Math.round(d.frequency * 100) / 100),
+        color: 'bg-primary-blue',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 7
+      },
+      {
+        id: 'cpc',
+        title: 'CPC (€)',
+        value: Math.round(updatedCurrentMetrics.cpc * 100) / 100,
+        previousValue: Math.round(updatedPreviousMetrics.cpc * 100) / 100,
+        chartData: dailyChartData.map(d => Math.round(d.cpc * 100) / 100),
+        color: 'bg-secondary-blue',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 8
+      },
        {
          id: 'leads',
          title: 'Leads',
@@ -576,7 +635,8 @@ function App() {
          previousValue: 0,
          chartData: updatedDailyDateRange.map(() => 0),
          color: 'bg-green-600',
-         icon: <UserPlus className="w-4 h-4" />
+         icon: <Eye className="w-4 h-4" />,
+         libraryId: 9
        },
        {
          id: 'qualified-leads',
@@ -585,7 +645,8 @@ function App() {
          previousValue: 0,
          chartData: updatedDailyDateRange.map(() => 0),
          color: 'bg-green-700',
-         icon: <Users className="w-4 h-4" />
+         icon: <Eye className="w-4 h-4" />,
+         libraryId: 10
        },
        {
          id: 'cost-per-lead',
@@ -594,7 +655,8 @@ function App() {
          previousValue: 0,
          chartData: updatedDailyDateRange.map(() => 0),
          color: 'bg-green-800',
-         icon: <DollarSign className="w-4 h-4" />
+         icon: <Eye className="w-4 h-4" />,
+         libraryId: 11
        },
        {
          id: 'conversion-rate',
@@ -603,7 +665,8 @@ function App() {
          previousValue: 0,
          chartData: updatedDailyDateRange.map(() => 0),
          color: 'bg-green-600',
-         icon: <TrendingUp className="w-4 h-4" />
+         icon: <Eye className="w-4 h-4" />,
+         libraryId: 12
        },
        {
          id: 'lead-quality',
@@ -612,7 +675,8 @@ function App() {
          previousValue: 0,
          chartData: updatedDailyDateRange.map(() => 0),
          color: 'bg-green-700',
-         icon: <Target className="w-4 h-4" />
+         icon: <Eye className="w-4 h-4" />,
+         libraryId: 13
        },
        {
          id: 'follow-up-rate',
@@ -621,7 +685,8 @@ function App() {
          previousValue: 0,
          chartData: updatedDailyDateRange.map(() => 0),
          color: 'bg-green-800',
-         icon: <MessageSquare className="w-4 h-4" />
+         icon: <Eye className="w-4 h-4" />,
+         libraryId: 14
       }
     ]);
   }, [selectedCustomer, selectedCampaignIds, selectedAdsetIds, selectedAdIds, startDate, endDate, adInsights, supabaseCampaigns]);
@@ -769,6 +834,10 @@ function App() {
     setCurrentPage('supabase-campaigns');
   };
 
+  const handleNavigateToDefinitions = () => {
+    setCurrentPage('definitions');
+  };
+
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = 'move';
@@ -827,10 +896,11 @@ function App() {
   if (currentPage === 'supabase-tables') {
     return (
       <>
-        <Navbar 
+        <Navbar
           onNavigateToDashboard={handleNavigateToDashboard}
           onNavigateToCustomers={handleNavigateToCustomers}
           onNavigateToSupabaseTables={handleNavigateToSupabaseTables}
+          onNavigateToDefinitions={handleNavigateToDefinitions}
           selectedCustomer={selectedCustomer}
           currentPage={currentPage}
           consoleMessages={consoleMessages}
@@ -848,12 +918,13 @@ function App() {
   if (currentPage === 'supabase-customers') {
     return (
       <>
-        <Navbar 
+        <Navbar
           onNavigateToDashboard={handleNavigateToDashboard}
           onNavigateToCustomers={handleNavigateToCustomers}
           onNavigateToSupabaseTables={handleNavigateToSupabaseTables}
           onNavigateToSupabaseCustomers={handleNavigateToSupabaseCustomers}
           onNavigateToSupabaseCampaigns={handleNavigateToSupabaseCampaigns}
+          onNavigateToDefinitions={handleNavigateToDefinitions}
           onExport={handlePrintDashboard}
           selectedCustomer={selectedCustomer}
           currentPage={currentPage}
@@ -872,34 +943,58 @@ function App() {
   if (currentPage === 'supabase-campaigns') {
     return (
       <>
-        <Navbar 
+        <Navbar
           onNavigateToDashboard={handleNavigateToDashboard}
           onNavigateToCustomers={handleNavigateToCustomers}
           onNavigateToSupabaseTables={handleNavigateToSupabaseTables}
           onNavigateToSupabaseCustomers={handleNavigateToSupabaseCustomers}
           onNavigateToSupabaseCampaigns={handleNavigateToSupabaseCampaigns}
+          onNavigateToDefinitions={handleNavigateToDefinitions}
           onExport={handlePrintDashboard}
           selectedCustomer={selectedCustomer}
           currentPage={currentPage}
           consoleMessages={consoleMessages}
           onClearConsole={clearConsole}
         />
-        <SupabaseCustomerCampaignsPage 
-          onBack={handleBackToDashboard} 
+        <SupabaseCustomerCampaignsPage
+          onBack={handleBackToDashboard}
           addConsoleMessage={addConsoleMessage}
         />
       </>
     );
   }
 
+  // Show Definitions page if selected
+  if (currentPage === 'definitions') {
+    return (
+      <>
+        <Navbar
+          onNavigateToDashboard={handleNavigateToDashboard}
+          onNavigateToCustomers={handleNavigateToCustomers}
+          onNavigateToSupabaseTables={handleNavigateToSupabaseTables}
+          onNavigateToSupabaseCustomers={handleNavigateToSupabaseCustomers}
+          onNavigateToSupabaseCampaigns={handleNavigateToSupabaseCampaigns}
+          onNavigateToDefinitions={handleNavigateToDefinitions}
+          onExport={handlePrintDashboard}
+          selectedCustomer={selectedCustomer}
+          currentPage={currentPage}
+          consoleMessages={consoleMessages}
+          onClearConsole={clearConsole}
+        />
+        <DefinitionsPage />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar 
+      <Navbar
         onNavigateToDashboard={handleNavigateToDashboard}
         onNavigateToCustomers={handleNavigateToCustomers}
         onNavigateToSupabaseTables={handleNavigateToSupabaseTables}
         onNavigateToSupabaseCustomers={handleNavigateToSupabaseCustomers}
         onNavigateToSupabaseCampaigns={handleNavigateToSupabaseCampaigns}
+        onNavigateToDefinitions={handleNavigateToDefinitions}
         onExport={handlePrintDashboard}
         selectedCustomer={selectedCustomer}
         currentPage={currentPage}
@@ -962,6 +1057,7 @@ function App() {
                 icon={metric.icon}
                 startDate={startDate}
                 endDate={endDate}
+                libraryId={metric.libraryId}
               />
             </div>
           ))}

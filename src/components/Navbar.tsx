@@ -9,19 +9,21 @@ interface NavbarProps {
   onNavigateToSupabaseTables?: () => void;
   onNavigateToSupabaseCustomers?: () => void;
   onNavigateToSupabaseCampaigns?: () => void;
+  onNavigateToDefinitions?: () => void;
   onExport?: () => void;
   selectedCustomer?: Customer | null;
-  currentPage?: 'dashboard' | 'supabase-tables' | 'supabase-customers' | 'supabase-campaigns';
+  currentPage?: 'dashboard' | 'supabase-tables' | 'supabase-customers' | 'supabase-campaigns' | 'definitions';
   consoleMessages?: string[];
   onClearConsole?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ 
-  onNavigateToDashboard, 
+export const Navbar: React.FC<NavbarProps> = ({
+  onNavigateToDashboard,
   onNavigateToCustomers,
   onNavigateToSupabaseTables,
   onNavigateToSupabaseCustomers,
   onNavigateToSupabaseCampaigns,
+  onNavigateToDefinitions,
   onExport,
   selectedCustomer,
   currentPage,
@@ -265,6 +267,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <div className="w-4 h-4 flex items-center justify-center">
                     </div>
                     <span className="text-gray-900">API-Einstellungen</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onNavigateToDefinitions?.();
+                      setOpenDropdown(null);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                    style={{ backgroundColor: 'white' }}
+                  >
+                    <div className="w-4 h-4 flex items-center justify-center">
+                    </div>
+                    <span className="text-gray-900">Definitionen</span>
                   </button>
                   <button className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150" style={{ backgroundColor: 'white' }}>
                     <div className="w-4 h-4 flex items-center justify-center">

@@ -1,5 +1,6 @@
 const fetch = require('node-fetch').default;
 const { createClient } = require('@supabase/supabase-js');
+const { TimeoutMonitor } = require('./utils/timeoutMonitor');
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -29,6 +30,8 @@ exports.handler = async (event, context) => {
       }),
     };
   }
+
+  const timeoutMonitor = new TimeoutMonitor(5500);
 
   try {
     console.log('Fetching ad insights from Meta Graph API...');
@@ -73,6 +76,8 @@ exports.handler = async (event, context) => {
     const queryParams = event.queryStringParameters || {};
     const startDate = queryParams.startDate;
     const endDate = queryParams.endDate;
+    const statusFilter = queryParams.statusFilter;
+    const jobId = queryParams.jobId;
 
     if (!startDate || !endDate) {
       console.error('Missing required date parameters');
@@ -109,10 +114,16 @@ exports.handler = async (event, context) => {
 
     console.log('Step 1: Fetching ad IDs from Supabase ads table...');
 
-    const { data: adsData, error: adsError } = await supabase
+    let adsQuery = supabase
       .from('ads')
       .select('id')
       .order('id', { ascending: true });
+
+    if (statusFilter === 'active') {
+      adsQuery = adsQuery.eq('status', 'ACTIVE');
+    }
+
+    const { data: adsData, error: adsError } = await adsQuery;
 
     if (adsError) {
       console.error('Error fetching ads from Supabase:', adsError);
@@ -129,7 +140,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    console.log(`Found ${(adsData || []).length} ads in Supabase`);
+    console.log(`Found ${(adsData || []).length} ads in Supabase${statusFilter === 'active' ? ' (active only)' : ''}`);
 
     if (!adsData || adsData.length === 0) {
       return {
@@ -148,6 +159,10 @@ exports.handler = async (event, context) => {
             processed: 0,
             errors: 0,
             errorDetails: []
+          },
+          timeout: {
+            occurred: false,
+            lastProcessedId: null
           }
         }),
       };
@@ -157,8 +172,17 @@ exports.handler = async (event, context) => {
 
     let allInsightsData = [];
     let apiErrors = [];
+    let timedOut = false;
+    let adsProcessed = 0;
 
     for (const ad of adsData) {
+      if (!timeoutMonitor.hasTimeRemaining()) {
+        console.log(`Timeout approaching. Stopping at ad ${ad.id}. Processed ${adsProcessed} of ${adsData.length} ads.`);
+        timedOut = true;
+        timeoutMonitor.setLastProcessedId(ad.id);
+        break;
+      }
+
       const insightsUrl = `https://graph.facebook.com/v19.0/${ad.id}/insights`;
       const insightsParams = new URLSearchParams({
         access_token: accessToken,
@@ -188,6 +212,7 @@ exports.handler = async (event, context) => {
           }
 
           console.log(`Successfully fetched ${insights.length} insight records for ad ${ad.id}`);
+          adsProcessed++;
         } else {
           const errorText = await insightsResponse.text();
           console.error(`Error response from Meta API for ad ${ad.id}:`, insightsResponse.status, errorText);
@@ -216,6 +241,12 @@ exports.handler = async (event, context) => {
     };
 
     for (const insight of allInsightsData) {
+      if (!timeoutMonitor.hasTimeRemaining()) {
+        console.log(`Timeout approaching during upsert. Stopping.`);
+        timedOut = true;
+        break;
+      }
+
       try {
         const insightData = {
           ad_id: insight.ad_id ? String(insight.ad_id) : null,
@@ -267,24 +298,52 @@ exports.handler = async (event, context) => {
 
     console.log(`Supabase Sync completed. Processed: ${upsertResults.processed}, Errors: ${upsertResults.errors.length}`);
 
+    if (jobId && timedOut) {
+      const { error: jobUpdateError } = await supabase
+        .from('sync_jobs')
+        .update({
+          status: 'failed',
+          error_message: `Function timed out after processing ${adsProcessed} of ${adsData.length} ads`,
+          last_processed_id: timeoutMonitor.lastProcessedId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', jobId);
+
+      if (jobUpdateError) {
+        console.error('Error updating job status:', jobUpdateError);
+      }
+    }
+
+    const statusCode = timedOut ? 206 : 200;
+
     return {
-      statusCode: 200,
+      statusCode,
       headers: {
         ...headers,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message: 'Ad insights fetched successfully from Meta Graph API',
+        message: timedOut
+          ? 'Ad insights fetch timed out - partial results returned'
+          : 'Ad insights fetched successfully from Meta Graph API',
         source: 'Meta Graph API',
         timestamp: new Date().toISOString(),
         dateRange: { startDate, endDate },
         totalCount: allInsightsData.length,
-        adsQueried: adsData.length,
+        adsQueried: adsProcessed,
+        totalAds: adsData.length,
         apiErrors: apiErrors.length > 0 ? apiErrors : undefined,
         supabaseSync: {
           processed: upsertResults.processed,
           errors: upsertResults.errors.length,
           errorDetails: upsertResults.errors
+        },
+        timeout: {
+          occurred: timedOut,
+          lastProcessedId: timeoutMonitor.lastProcessedId,
+          elapsedMs: timeoutMonitor.getElapsedTime(),
+          adsProcessed,
+          adsRemaining: adsData.length - adsProcessed
         }
       }),
     };
@@ -301,6 +360,10 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({
         error: 'Internal server error',
         message: error.message,
+        timeout: {
+          occurred: false,
+          lastProcessedId: timeoutMonitor.lastProcessedId
+        }
       }),
     };
   }
