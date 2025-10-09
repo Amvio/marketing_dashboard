@@ -94,7 +94,7 @@ exports.handler = async (event, context) => {
 
     try {
       while (hasMorePages) {
-        const leadTableApiUrl = `https://api.lead-table.com/api/v2/external/lead/customer/all?page=${currentPage}&limit=${limit}`;
+        const leadTableApiUrl = `https://api.lead-table.com/api/v2/external/customer/all?page=${currentPage}&limit=${limit}`;
 
         console.log(`Fetching page ${currentPage} from Lead-Table API...`);
 
