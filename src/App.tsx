@@ -65,8 +65,7 @@ function App() {
   const [startDate, setStartDate] = useState<Date>(initialStartDate);
   const [endDate, setEndDate] = useState<Date>(initialEndDate);
   
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [sichtbarkeit, setSichtbarkeit] = useState<string>('Intern');
 
   // Function to add console messages
   const addConsoleMessage = (message: string) => {
@@ -133,6 +132,17 @@ function App() {
   );
 
   const [metricsData, setMetricsData] = useState(() => [
+    // Row 1: Reichweite, Impressionen, Klicks, CTR, Frequenz, Ausgaben
+    {
+      id: 'reach',
+      title: 'Reichweite',
+      value: currentMetrics.reach,
+      previousValue: previousMetrics.reach,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-primary-blue',
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 4
+    },
     {
       id: 'impressions',
       title: 'Impressionen',
@@ -154,26 +164,6 @@ function App() {
       libraryId: 2
     },
     {
-      id: 'spend',
-      title: 'Ausgaben (€)',
-      value: Math.round(currentMetrics.spend * 100) / 100,
-      previousValue: Math.round(previousMetrics.spend * 100) / 100,
-      chartData: dailyDateRange.map(() => 0),
-      color: 'bg-tertiary-blue',
-      icon: <Eye className="w-4 h-4" />,
-      libraryId: 3
-    },
-    {
-      id: 'reach',
-      title: 'Reichweite',
-      value: currentMetrics.reach,
-      previousValue: previousMetrics.reach,
-      chartData: dailyDateRange.map(() => 0),
-      color: 'bg-primary-blue',
-      icon: <Eye className="w-4 h-4" />,
-      libraryId: 4
-    },
-    {
       id: 'ctr',
       title: 'CTR (%)',
       value: Math.round(currentMetrics.ctr * 100) / 100,
@@ -182,16 +172,6 @@ function App() {
       color: 'bg-secondary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 5
-    },
-    {
-      id: 'cpm',
-      title: 'CPM (€)',
-      value: Math.round(currentMetrics.cpm * 100) / 100,
-      previousValue: Math.round(previousMetrics.cpm * 100) / 100,
-      chartData: dailyDateRange.map(() => 0),
-      color: 'bg-tertiary-blue',
-      icon: <Eye className="w-4 h-4" />,
-      libraryId: 6
     },
     {
       id: 'frequency',
@@ -204,15 +184,16 @@ function App() {
       libraryId: 7
     },
     {
-      id: 'cpc',
-      title: 'CPC (€)',
-      value: Math.round(currentMetrics.cpc * 100) / 100,
-      previousValue: Math.round(previousMetrics.cpc * 100) / 100,
+      id: 'spend',
+      title: 'Ausgaben (€)',
+      value: Math.round(currentMetrics.spend * 100) / 100,
+      previousValue: Math.round(previousMetrics.spend * 100) / 100,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-secondary-blue',
+      color: 'bg-tertiary-blue',
       icon: <Eye className="w-4 h-4" />,
-      libraryId: 8
+      libraryId: 3
     },
+    // Row 2: Leads, Qualifizierte Leads, Lead Qualität, Conversion Rate, Follow Up Rate, Kosten pro Lead
     {
       id: 'leads',
       title: 'Leads',
@@ -234,14 +215,14 @@ function App() {
       libraryId: 10
     },
     {
-      id: 'cost-per-lead',
-      title: 'Kosten pro Lead',
+      id: 'lead-quality',
+      title: 'Lead Qualität',
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-green-800',
+      color: 'bg-green-700',
       icon: <Eye className="w-4 h-4" />,
-      libraryId: 11
+      libraryId: 13
     },
     {
       id: 'conversion-rate',
@@ -254,16 +235,6 @@ function App() {
       libraryId: 12
     },
     {
-      id: 'lead-quality',
-      title: 'Lead Qualität',
-      value: 0,
-      previousValue: 0,
-      chartData: dailyDateRange.map(() => 0),
-      color: 'bg-green-700',
-      icon: <Eye className="w-4 h-4" />,
-      libraryId: 13
-    },
-    {
       id: 'follow-up-rate',
       title: 'Follow-up Rate (%)',
       value: 0,
@@ -272,6 +243,37 @@ function App() {
       color: 'bg-green-800',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 14
+    },
+    {
+      id: 'cost-per-lead',
+      title: 'Kosten pro Lead',
+      value: 0,
+      previousValue: 0,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-green-800',
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 11
+    },
+    // Row 3: CPM, CPC
+    {
+      id: 'cpm',
+      title: 'CPM (€)',
+      value: Math.round(currentMetrics.cpm * 100) / 100,
+      previousValue: Math.round(previousMetrics.cpm * 100) / 100,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-tertiary-blue',
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 6
+    },
+    {
+      id: 'cpc',
+      title: 'CPC (€)',
+      value: Math.round(currentMetrics.cpc * 100) / 100,
+      previousValue: Math.round(previousMetrics.cpc * 100) / 100,
+      chartData: dailyDateRange.map(() => 0),
+      color: 'bg-secondary-blue',
+      icon: <Eye className="w-4 h-4" />,
+      libraryId: 8
     }
   ]);
   // Fetch customers from Supabase
@@ -548,6 +550,17 @@ function App() {
     );
     
     setMetricsData([
+      // Row 1: Reichweite, Impressionen, Klicks, CTR, Frequenz, Ausgaben
+      {
+        id: 'reach',
+        title: 'Reichweite',
+        value: updatedCurrentMetrics.reach,
+        previousValue: updatedPreviousMetrics.reach,
+        chartData: dailyChartData.map(d => d.reach),
+        color: 'bg-primary-blue',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 4
+      },
       {
         id: 'impressions',
         title: 'Impressionen',
@@ -569,26 +582,6 @@ function App() {
         libraryId: 2
       },
       {
-        id: 'spend',
-        title: 'Ausgaben (€)',
-        value: Math.round(updatedCurrentMetrics.spend * 100) / 100,
-        previousValue: Math.round(updatedPreviousMetrics.spend * 100) / 100,
-        chartData: dailyChartData.map(d => Math.round(d.spend * 100) / 100),
-        color: 'bg-tertiary-blue',
-        icon: <Eye className="w-4 h-4" />,
-        libraryId: 3
-      },
-      {
-        id: 'reach',
-        title: 'Reichweite',
-        value: updatedCurrentMetrics.reach,
-        previousValue: updatedPreviousMetrics.reach,
-        chartData: dailyChartData.map(d => d.reach),
-        color: 'bg-primary-blue',
-        icon: <Eye className="w-4 h-4" />,
-        libraryId: 4
-      },
-      {
         id: 'ctr',
         title: 'CTR (%)',
         value: Math.round(updatedCurrentMetrics.ctr * 100) / 100,
@@ -597,16 +590,6 @@ function App() {
         color: 'bg-secondary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 5
-      },
-      {
-        id: 'cpm',
-        title: 'CPM (€)',
-        value: Math.round(updatedCurrentMetrics.cpm * 100) / 100,
-        previousValue: Math.round(updatedPreviousMetrics.cpm * 100) / 100,
-        chartData: dailyChartData.map(d => Math.round(d.cpm * 100) / 100),
-        color: 'bg-tertiary-blue',
-        icon: <Eye className="w-4 h-4" />,
-        libraryId: 6
       },
       {
         id: 'frequency',
@@ -619,6 +602,88 @@ function App() {
         libraryId: 7
       },
       {
+        id: 'spend',
+        title: 'Ausgaben (€)',
+        value: Math.round(updatedCurrentMetrics.spend * 100) / 100,
+        previousValue: Math.round(updatedPreviousMetrics.spend * 100) / 100,
+        chartData: dailyChartData.map(d => Math.round(d.spend * 100) / 100),
+        color: 'bg-tertiary-blue',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 3
+      },
+      // Row 2: Leads, Qualifizierte Leads, Lead Qualität, Conversion Rate, Follow Up Rate, Kosten pro Lead
+      {
+        id: 'leads',
+        title: 'Leads',
+        value: 0,
+        previousValue: 0,
+        chartData: updatedDailyDateRange.map(() => 0),
+        color: 'bg-green-600',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 9
+      },
+      {
+        id: 'qualified-leads',
+        title: 'Qualifizierte Leads',
+        value: 0,
+        previousValue: 0,
+        chartData: updatedDailyDateRange.map(() => 0),
+        color: 'bg-green-700',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 10
+      },
+      {
+        id: 'lead-quality',
+        title: 'Lead Qualität',
+        value: 0,
+        previousValue: 0,
+        chartData: updatedDailyDateRange.map(() => 0),
+        color: 'bg-green-700',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 13
+      },
+      {
+        id: 'conversion-rate',
+        title: 'Conversion Rate (%)',
+        value: 0,
+        previousValue: 0,
+        chartData: updatedDailyDateRange.map(() => 0),
+        color: 'bg-green-600',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 12
+      },
+      {
+        id: 'follow-up-rate',
+        title: 'Follow-up Rate (%)',
+        value: 0,
+        previousValue: 0,
+        chartData: updatedDailyDateRange.map(() => 0),
+        color: 'bg-green-800',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 14
+      },
+      {
+        id: 'cost-per-lead',
+        title: 'Kosten pro Lead',
+        value: 0,
+        previousValue: 0,
+        chartData: updatedDailyDateRange.map(() => 0),
+        color: 'bg-green-800',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 11
+      },
+      // Row 3: CPM, CPC
+      {
+        id: 'cpm',
+        title: 'CPM (€)',
+        value: Math.round(updatedCurrentMetrics.cpm * 100) / 100,
+        previousValue: Math.round(updatedPreviousMetrics.cpm * 100) / 100,
+        chartData: dailyChartData.map(d => Math.round(d.cpm * 100) / 100),
+        color: 'bg-tertiary-blue',
+        icon: <Eye className="w-4 h-4" />,
+        libraryId: 6
+      },
+      {
         id: 'cpc',
         title: 'CPC (€)',
         value: Math.round(updatedCurrentMetrics.cpc * 100) / 100,
@@ -627,66 +692,6 @@ function App() {
         color: 'bg-secondary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 8
-      },
-       {
-         id: 'leads',
-         title: 'Leads',
-         value: 0,
-         previousValue: 0,
-         chartData: updatedDailyDateRange.map(() => 0),
-         color: 'bg-green-600',
-         icon: <Eye className="w-4 h-4" />,
-         libraryId: 9
-       },
-       {
-         id: 'qualified-leads',
-         title: 'Qualifizierte Leads',
-         value: 0,
-         previousValue: 0,
-         chartData: updatedDailyDateRange.map(() => 0),
-         color: 'bg-green-700',
-         icon: <Eye className="w-4 h-4" />,
-         libraryId: 10
-       },
-       {
-         id: 'cost-per-lead',
-         title: 'Kosten pro Lead',
-         value: 0,
-         previousValue: 0,
-         chartData: updatedDailyDateRange.map(() => 0),
-         color: 'bg-green-800',
-         icon: <Eye className="w-4 h-4" />,
-         libraryId: 11
-       },
-       {
-         id: 'conversion-rate',
-         title: 'Conversion Rate (%)',
-         value: 0,
-         previousValue: 0,
-         chartData: updatedDailyDateRange.map(() => 0),
-         color: 'bg-green-600',
-         icon: <Eye className="w-4 h-4" />,
-         libraryId: 12
-       },
-       {
-         id: 'lead-quality',
-         title: 'Lead Qualität',
-         value: 0,
-         previousValue: 0,
-         chartData: updatedDailyDateRange.map(() => 0),
-         color: 'bg-green-700',
-         icon: <Eye className="w-4 h-4" />,
-         libraryId: 13
-       },
-       {
-         id: 'follow-up-rate',
-         title: 'Follow-up Rate (%)',
-         value: 0,
-         previousValue: 0,
-         chartData: updatedDailyDateRange.map(() => 0),
-         color: 'bg-green-800',
-         icon: <Eye className="w-4 h-4" />,
-         libraryId: 14
       }
     ]);
   }, [selectedCustomer, selectedCampaignIds, selectedAdsetIds, selectedAdIds, startDate, endDate, adInsights, supabaseCampaigns]);
@@ -789,6 +794,10 @@ function App() {
     setSelectedAdIds(adIds);
   };
 
+  const handleSichtbarkeitChange = (value: string) => {
+    setSichtbarkeit(value);
+  };
+
   const handleAddTask = (title: string, assignee: string) => {
     const newTask: Task = {
       id: Date.now().toString(),
@@ -801,7 +810,7 @@ function App() {
   };
 
   const handleToggleTask = (id: string) => {
-    setTasks(tasks.map(task => 
+    setTasks(tasks.map(task =>
       task.id === id ? { ...task, completed: !task.completed } : task
     ));
   };
@@ -836,52 +845,6 @@ function App() {
 
   const handleNavigateToDefinitions = () => {
     setCurrentPage('definitions');
-  };
-
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/html', '');
-  };
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    
-    if (draggedIndex !== null && draggedIndex !== index) {
-      setDragOverIndex(index);
-    }
-  };
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    
-    if (draggedIndex === null || draggedIndex === dropIndex) {
-      setDraggedIndex(null);
-      return;
-    }
-
-    const newMetricsData = [...metricsData];
-    const draggedItem = newMetricsData[draggedIndex];
-    
-    // Remove the dragged item
-    newMetricsData.splice(draggedIndex, 1);
-    
-    // Insert at the new position
-    newMetricsData.splice(dropIndex, 0, draggedItem);
-    
-    setMetricsData(newMetricsData);
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
   };
 
   const handlePrintDashboard = () => {
@@ -1019,35 +982,22 @@ function App() {
         onDateRangeChange={handleDateRangeChange}
         dateRangeString={dateRangeString}
         onNavigateToCustomers={handleNavigateToCustomers}
+        sichtbarkeit={sichtbarkeit}
+        onSichtbarkeitChange={handleSichtbarkeitChange}
       />
       
       <div className="p-6 space-y-6">
-        {/* All 12 Metrics Cards - Unified Drag & Drop */}
+        {/* All 14 Metrics Cards */}
         <div className="grid grid-cols-6 gap-6">
-          {metricsData.map((metric, index) => (
-            <div
-              key={metric.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
-              className={`cursor-move transition-all duration-300 ease-in-out ${
-                draggedIndex === index 
-                  ? 'opacity-30 scale-110 rotate-2 z-50' 
-                  : dragOverIndex === index
-                  ? 'scale-105 translate-x-2 shadow-lg'
-                  : 'hover:scale-102 hover:shadow-md'
-              }`}
-              style={{
-                transform: dragOverIndex !== null && dragOverIndex < index && draggedIndex !== null && draggedIndex > index
-                  ? 'translateX(8px)'
-                  : dragOverIndex !== null && dragOverIndex > index && draggedIndex !== null && draggedIndex < index
-                  ? 'translateX(-8px)'
-                  : undefined
-              }}
-            >
+          {metricsData
+            .filter(metric => {
+              if (sichtbarkeit === 'Alles') {
+                return !['spend', 'cpm', 'cpc', 'cost-per-lead'].includes(metric.id);
+              }
+              return true;
+            })
+            .map((metric) => (
+            <div key={metric.id}>
               <MetricCard
                 title={metric.title}
                 value={metric.value}

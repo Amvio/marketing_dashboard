@@ -10,6 +10,8 @@ export interface Customer {
   customer_website: string | null;
   logo_url: string | null;
   customer_created_at: string;
+  leadtable_id?: string | null;
+  source?: string | null;
 }
 
 export interface MetaAdsMetrics {

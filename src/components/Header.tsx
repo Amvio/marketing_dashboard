@@ -22,6 +22,8 @@ interface HeaderProps {
   onDateRangeChange: (startDate: Date, endDate: Date) => void;
   dateRangeString: string;
   onNavigateToCustomers: () => void;
+  sichtbarkeit: string;
+  onSichtbarkeitChange: (value: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,11 +43,14 @@ export const Header: React.FC<HeaderProps> = ({
   endDate,
   onDateRangeChange,
   dateRangeString,
-  onNavigateToCustomers
+  onNavigateToCustomers,
+  sichtbarkeit,
+  onSichtbarkeitChange
 }) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
   const [buttonRef, setButtonRef] = React.useState<HTMLButtonElement | null>(null);
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = React.useState(false);
+  const [isSichtbarkeitDropdownOpen, setIsSichtbarkeitDropdownOpen] = React.useState(false);
 
   const handleDateRangeChange = (newStartDate: Date, newEndDate: Date) => {
     onDateRangeChange(newStartDate, newEndDate);
@@ -183,6 +188,43 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-sm font-medium truncate">Vakanz: Alle</span>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 flex-shrink-0" />
             </button>
+          </div>
+
+          <div className="relative w-72">
+            <button
+              className="relative appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center space-x-2 w-full"
+              style={{ backgroundColor: 'white' }}
+              onClick={() => setIsSichtbarkeitDropdownOpen(!isSichtbarkeitDropdownOpen)}
+            >
+              <span className="text-sm font-medium truncate">Sichtbarkeit: {sichtbarkeit}</span>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 flex-shrink-0" />
+            </button>
+
+            {isSichtbarkeitDropdownOpen && (
+              <div
+                className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl z-50"
+                style={{ backgroundColor: 'white' }}
+              >
+                <div className="p-2" style={{ backgroundColor: 'white' }}>
+                  {['Intern', 'Alles'].map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => {
+                        onSichtbarkeitChange(option);
+                        setIsSichtbarkeitDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                      style={{ backgroundColor: 'white' }}
+                    >
+                      <div className="w-4 h-4 flex items-center justify-center">
+                        {sichtbarkeit === option && <Check className="w-3 h-3 text-blue-600" />}
+                      </div>
+                      <span className="text-gray-900">{option}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           </div>
         </div>

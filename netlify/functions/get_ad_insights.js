@@ -154,7 +154,7 @@ exports.handler = async (event, context) => {
       .order('id', { ascending: true });
 
     if (statusFilter === 'active') {
-      adsQuery = adsQuery.eq('status', 'ACTIVE');
+      adsQuery = adsQuery.eq('effective_status', 'ACTIVE');
     }
 
     const { data: adsData, error: adsError } = await adsQuery;

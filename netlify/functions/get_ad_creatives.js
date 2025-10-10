@@ -88,7 +88,7 @@ exports.handler = async (event, context) => {
 
     // Apply status filter if specified
     if (statusFilter === 'active') {
-      adsQuery = adsQuery.eq('status', 'ACTIVE');
+      adsQuery = adsQuery.eq('effective_status', 'ACTIVE');
     }
 
     const { data: adsData, error: adsError } = await adsQuery;
@@ -157,7 +157,7 @@ exports.handler = async (event, context) => {
       const adUrl = `https://graph.facebook.com/v19.0/${adId}`;
       const adParams = new URLSearchParams({
         access_token: accessToken,
-        fields: 'creative{id,name,object_story_spec,asset_feed_spec}',
+        fields: 'creative{id,name,object_story_spec,asset_feed_spec,created_time,updated_time}',
       });
 
       try {

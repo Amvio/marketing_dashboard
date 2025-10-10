@@ -87,130 +87,141 @@ exports.handler = async (event, context) => {
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
     console.log('Supabase client created successfully');
 
-    let allCustomers = [];
-    let currentPage = 1;
-    const limit = 50;
-    let hasMorePages = true;
-
     try {
-      while (hasMorePages) {
-        const leadTableApiUrl = `https://api.lead-table.com/api/v2/external/customer/all?page=${currentPage}&limit=${limit}`;
+      const leadTableApiUrl = 'https://api.lead-table.com/api/v3/external/customer/all';
 
-        console.log(`Fetching page ${currentPage} from Lead-Table API...`);
+      console.log('Fetching all customers from Lead-Table API...');
 
-        const leadTableResponse = await fetch(leadTableApiUrl, {
-          method: 'GET',
-          headers: {
-            'email': leadTableEmail,
-            'Authorization': `Bearer ${leadTableApiKey}`,
-            'Accept': 'application/json',
-          },
+      const leadTableResponse = await fetch(leadTableApiUrl, {
+        method: 'GET',
+        headers: {
+          'email': leadTableEmail,
+          'Authorization': `Bearer ${leadTableApiKey}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!leadTableResponse.ok) {
+        const errorText = await leadTableResponse.text();
+        console.error('Lead-Table API error response:', {
+          status: leadTableResponse.status,
+          statusText: leadTableResponse.statusText,
+          body: errorText
         });
 
-        if (!leadTableResponse.ok) {
-          const errorText = await leadTableResponse.text();
-          console.error('Lead-Table API error response:', {
-            status: leadTableResponse.status,
-            statusText: leadTableResponse.statusText,
-            body: errorText
-          });
+        return {
+          statusCode: leadTableResponse.status,
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            error: 'Lead-Table API Error',
+            message: `Lead-Table API returned ${leadTableResponse.status}: ${leadTableResponse.statusText}`,
+            details: errorText,
+          }),
+        };
+      }
 
+      const leadTableData = await leadTableResponse.json();
+      console.log('Lead-Table API response received successfully');
+
+      const allCustomers = leadTableData.customers || [];
+      console.log(`Total customers fetched: ${allCustomers.length}`);
+
+      let insertResults = {
+        processed: 0,
+        inserted: 0,
+        skipped: 0,
+        errors: []
+      };
+
+      if (allCustomers.length > 0) {
+        console.log(`Fetching existing leadtable_id values from Kunden table...`);
+
+        const { data: existingCustomers, error: fetchError } = await supabase
+          .from('Kunden')
+          .select('leadtable_id')
+          .not('leadtable_id', 'is', null);
+
+        if (fetchError) {
+          console.error('Error fetching existing customers:', fetchError);
           return {
-            statusCode: leadTableResponse.status,
+            statusCode: 500,
             headers: {
               ...headers,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              error: 'Lead-Table API Error',
-              message: `Lead-Table API returned ${leadTableResponse.status}: ${leadTableResponse.statusText}`,
-              details: errorText,
+              error: 'Database Error',
+              message: 'Failed to fetch existing customers from Kunden table',
+              details: fetchError.message,
             }),
           };
         }
 
-        const leadTableData = await leadTableResponse.json();
-        console.log(`Page ${currentPage} fetched successfully from Lead-Table API`);
+        const existingLeadTableIds = new Set(
+          (existingCustomers || []).map(c => c.leadtable_id).filter(id => id !== null)
+        );
+        console.log(`Found ${existingLeadTableIds.size} existing customers with leadtable_id`);
 
-        if (leadTableData.data && Array.isArray(leadTableData.data) && leadTableData.data.length > 0) {
-          allCustomers = allCustomers.concat(leadTableData.data);
-          console.log(`Added ${leadTableData.data.length} customers from page ${currentPage}`);
-
-          if (leadTableData.data.length < limit) {
-            hasMorePages = false;
-          } else {
-            currentPage++;
-          }
-        } else {
-          hasMorePages = false;
-        }
-      }
-
-      console.log(`Total customers fetched: ${allCustomers.length}`);
-
-      let upsertResults = {
-        processed: 0,
-        inserted: 0,
-        updated: 0,
-        errors: []
-      };
-
-      if (allCustomers.length > 0) {
-        console.log(`Processing ${allCustomers.length} customers for upsert...`);
+        console.log(`Processing ${allCustomers.length} customers for insert...`);
 
         for (const customer of allCustomers) {
           try {
+            insertResults.processed++;
+
+            const leadTableId = customer._id;
+
+            if (!leadTableId) {
+              console.log('Skipping customer without _id');
+              insertResults.skipped++;
+              continue;
+            }
+
+            if (existingLeadTableIds.has(leadTableId)) {
+              console.log(`Skipping existing customer with leadtable_id: ${leadTableId}`);
+              insertResults.skipped++;
+              continue;
+            }
+
             const customerData = {
-              customer_id: customer.id ? String(customer.id) : null,
-              name: customer.name || customer.full_name || null,
-              email: customer.email || null,
-              phone: customer.phone || customer.phone_number || null,
-              status: customer.status || null,
-              lead_source: customer.lead_source || customer.source || null,
-              company: customer.company || customer.company_name || null,
-              address: customer.address || null,
-              city: customer.city || null,
-              country: customer.country || null,
-              notes: customer.notes || customer.description || null,
-              tags: customer.tags ? (Array.isArray(customer.tags) ? customer.tags : [customer.tags]) : [],
-              custom_fields: customer.custom_fields || customer.metadata || {},
-              raw_data: customer,
-              last_synced_at: new Date().toISOString(),
-              api_created_at: customer.created_at ? new Date(customer.created_at).toISOString() : null,
-              api_updated_at: customer.updated_at ? new Date(customer.updated_at).toISOString() : null
+              customer_name: customer.name || null,
+              customer_created_at: customer.createdAt ? new Date(customer.createdAt).toISOString() : null,
+              leadtable_id: leadTableId,
+              source: 'Leadtable'
             };
 
-            console.log(`Upserting customer: ${customerData.customer_id} - ${customerData.name}`);
+            console.log(`Inserting new customer: ${customerData.leadtable_id} - ${customerData.customer_name}`);
 
             const { data, error } = await supabase
-              .from('customers_leadtable')
-              .upsert(customerData, {
-                onConflict: 'customer_id',
-                ignoreDuplicates: false
-              })
+              .from('Kunden')
+              .insert(customerData)
               .select();
 
             if (error) {
-              console.error(`Error upserting customer ${customerData.customer_id}:`, error);
-              upsertResults.errors.push({
-                customerId: customerData.customer_id,
+              console.error(`Error inserting customer ${customerData.leadtable_id}:`, error);
+              insertResults.errors.push({
+                leadtableId: customerData.leadtable_id,
+                name: customerData.customer_name,
                 error: error.message
               });
             } else {
-              upsertResults.processed++;
-              console.log(`Successfully upserted customer ${customerData.customer_id}`);
+              insertResults.inserted++;
+              console.log(`Successfully inserted customer ${customerData.leadtable_id}`);
             }
           } catch (processingError) {
-            console.error(`Error processing customer ${customer.id}:`, processingError);
-            upsertResults.errors.push({
-              customerId: customer.id,
+            console.error(`Error processing customer ${customer._id}:`, processingError);
+            insertResults.errors.push({
+              leadtableId: customer._id,
+              name: customer.name,
               error: processingError.message
             });
           }
         }
       }
 
-      console.log('Supabase Sync completed. Processed: ' + upsertResults.processed + ', Errors: ' + upsertResults.errors.length);
+      console.log('Supabase Sync completed. Processed: ' + insertResults.processed + ', Inserted: ' + insertResults.inserted + ', Skipped: ' + insertResults.skipped + ', Errors: ' + insertResults.errors.length);
 
       return {
         statusCode: 200,
@@ -219,15 +230,16 @@ exports.handler = async (event, context) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: 'Customers fetched successfully from Lead-Table API',
+          message: 'Customers synced successfully from Lead-Table API to Kunden table',
           source: 'Lead-Table API',
           timestamp: new Date().toISOString(),
-          totalCustomers: allCustomers.length,
-          pagesProcessed: currentPage,
+          totalCustomersFetched: allCustomers.length,
           supabaseSync: {
-            processed: upsertResults.processed,
-            errors: upsertResults.errors.length,
-            errorDetails: upsertResults.errors
+            processed: insertResults.processed,
+            inserted: insertResults.inserted,
+            skipped: insertResults.skipped,
+            errors: insertResults.errors.length,
+            errorDetails: insertResults.errors
           }
         }),
       };
