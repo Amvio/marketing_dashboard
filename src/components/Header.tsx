@@ -125,29 +125,36 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               {isCustomerDropdownOpen && (
-                <div 
+                <div
                   className="absolute top-full left-0 mt-1 w-full min-w-64 bg-white border border-gray-300 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto"
                   style={{ backgroundColor: 'white' }}
                 >
                   <div className="p-2" style={{ backgroundColor: 'white' }}>
-                    {customers.map((customer) => (
-                      <button
-                        key={customer.id}
-                        onClick={() => {
-                          onCustomerChange(customer);
-                          setIsCustomerDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
-                        style={{ backgroundColor: 'white' }}
-                      >
-                        <div className="w-4 h-4 flex items-center justify-center">
-                          {selectedCustomer.customer_id === customer.customer_id && <Check className="w-3 h-3 text-blue-600" />}
-                        </div>
-                        <span className="text-gray-900">
-                          {customer.customer_name || customer.customer_company_name || 'Unbekannter Kunde'}
-                        </span>
-                      </button>
-                    ))}
+                    {[...customers]
+                      .filter((customer) => customer.status === 'Aktiv')
+                      .sort((a, b) => {
+                        const nameA = (a.customer_name || a.customer_company_name || 'Unbekannter Kunde').toLowerCase();
+                        const nameB = (b.customer_name || b.customer_company_name || 'Unbekannter Kunde').toLowerCase();
+                        return nameA.localeCompare(nameB);
+                      })
+                      .map((customer) => (
+                        <button
+                          key={customer.id}
+                          onClick={() => {
+                            onCustomerChange(customer);
+                            setIsCustomerDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
+                          style={{ backgroundColor: 'white' }}
+                        >
+                          <div className="w-4 h-4 flex items-center justify-center">
+                            {selectedCustomer.customer_id === customer.customer_id && <Check className="w-3 h-3 text-blue-600" />}
+                          </div>
+                          <span className="text-gray-900">
+                            {customer.customer_name || customer.customer_company_name || 'Unbekannter Kunde'}
+                          </span>
+                        </button>
+                      ))}
                   </div>
                 </div>
               )}

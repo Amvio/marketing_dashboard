@@ -27,6 +27,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loadingCreativeImagesAbfrage, setLoadingCreativeImagesAbfrage] = useState(false);
   const [loadingCustomersLeadtableAbfrage, setLoadingCustomersLeadtableAbfrage] = useState(false);
   const [loadingLeadtableCampaignsAbfrage, setLoadingLeadtableCampaignsAbfrage] = useState(false);
+  const [loadingLeadtableLeadsAbfrage, setLoadingLeadtableLeadsAbfrage] = useState(false);
   const [loadingInsightsAbfrage, setLoadingInsightsAbfrage] = useState(false);
   const [showAdsetStatusPopup, setShowAdsetStatusPopup] = useState(false);
   const [showCreativesStatusPopup, setShowCreativesStatusPopup] = useState(false);
@@ -340,6 +341,50 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoadingLeadtableCampaignsAbfrage(false);
+    }
+  };
+
+  // Handler for fetching leadtable leads
+  const handleAbfrageLeadtableLeads = async () => {
+    setLoadingLeadtableLeadsAbfrage(true);
+    addConsoleMessage?.('Calling Netlify function for leadtable_leads...');
+
+    try {
+      console.log('Calling Netlify function for leadtable_leads...');
+      const response = await fetch('/api/get_leadtable_campaign_leads', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Netlify function response:', data);
+      addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
+
+      // Refresh the leadtable_leads table data after successful sync
+      await fetchTableData('leadtable_leads');
+      addConsoleMessage?.('Lead-Table leads refreshed after sync');
+    } catch (error) {
+      console.error('Error calling Netlify function:', error);
+      addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingLeadtableLeadsAbfrage(false);
     }
   };
 
@@ -716,6 +761,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     'customer_tasks',
     'customers_leadtable',
     'leadtable_campaigns',
+    'leadtable_leads',
     'dashboard_users',
     'campaigns',
     'ad_accounts',
@@ -913,6 +959,21 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                               title="Lead-Table Campaigns für alle Kunden abrufen"
                             >
                               {loadingLeadtableCampaignsAbfrage ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
+                              ) : (
+                                <Search className="w-3 h-3" />
+                              )}
+                              <span>Abfrage</span>
+                            </button>
+                          )}
+                          {tableName === 'leadtable_leads' && (
+                            <button
+                              onClick={handleAbfrageLeadtableLeads}
+                              disabled={loadingLeadtableLeadsAbfrage}
+                              className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                              title="Lead-Table Leads für alle Kampagnen abrufen"
+                            >
+                              {loadingLeadtableLeadsAbfrage ? (
                                 <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
                               ) : (
                                 <Search className="w-3 h-3" />

@@ -22,4 +22,5 @@ export interface Customer {
   customer_name: string | null;
   customer_company_name: string | null;
   logo_url: string | null;
+  status: string | null;
 }

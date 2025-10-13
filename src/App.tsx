@@ -281,11 +281,12 @@ function App() {
     const fetchCustomers = async () => {
       setLoadingCustomers(true);
       setErrorCustomers(null);
-      
+
       try {
         const { data, error } = await supabase
           .from('Kunden')
           .select('*')
+          .eq('status', 'Aktiv')
           .order('customer_created_at', { ascending: false });
 
         if (error) {

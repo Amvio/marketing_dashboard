@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Mail, Phone, MapPin, Globe, Calendar, RefreshCw, Database, CreditCard as Edit3, X, ChevronDown } from 'lucide-react';
+import { Building2, Users, Mail, Phone, MapPin, Globe, Calendar, RefreshCw, Database, CreditCard as Edit3, X, ChevronDown, CheckCircle } from 'lucide-react';
 import { supabase, Customer as SupabaseCustomer } from '../lib/supabase';
 import { SimpleHeader } from './SimpleHeader';
 import { AddCustomerForm, CustomerFormData } from './AddCustomerForm';
@@ -311,6 +311,7 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
     customer_adress: 'Adresse',
     customer_website: 'Webseite',
     logo_url: 'Logo',
+    status: 'Status',
   };
 
   return (
@@ -403,6 +404,7 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
                         {header === 'Telefonnummer' && <Phone className="w-4 h-4 inline mr-1" />}
                         {header === 'Adresse' && <MapPin className="w-4 h-4 inline mr-1" />}
                         {header === 'Webseite' && <Globe className="w-4 h-4 inline mr-1" />}
+                        {header === 'Status' && <CheckCircle className="w-4 h-4 inline mr-1" />}
                         <span>{header}</span>
                       </th>
                     ))}
@@ -489,6 +491,15 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
                         )}
                       </td>
                       <td className="py-4 px-6 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          customer.status === 'Aktiv'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {customer.status || 'Aktiv'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 whitespace-nowrap">
                         <button
                           onClick={() => handleEditClick(customer)}
                           className="text-blue-600 hover:text-blue-800 transition-colors p-1 rounded"
@@ -534,6 +545,7 @@ export const SupabaseCustomersPage: React.FC<SupabaseCustomersPageProps> = ({ on
             customer_contact_phone: editingCustomer.customer_contact_phone || '',
             customer_adress: editingCustomer.customer_adress || '',
             customer_website: editingCustomer.customer_website || '',
+            status: editingCustomer.status || 'Aktiv',
             logoFile: null
           } : undefined}
           isEditing={showEditForm}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Save, User, Building, Mail, Phone, MapPin, Globe, Briefcase, Upload, Image } from 'lucide-react';
+import { X, Save, User, Building, Mail, Phone, MapPin, Globe, Briefcase, Upload, Image, CheckCircle } from 'lucide-react';
 
 interface AddCustomerFormProps {
   onSubmit: (customerData: CustomerFormData, customerId?: number) => Promise<void>;
@@ -18,6 +18,7 @@ export interface CustomerFormData {
   customer_contact_phone: string;
   customer_adress: string;
   customer_website: string;
+  status: string;
   logoFile?: File | null;
 }
 
@@ -37,6 +38,7 @@ export const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
     customer_contact_phone: '',
     customer_adress: '',
     customer_website: '',
+    status: 'Aktiv',
     logoFile: null
   });
 
@@ -280,22 +282,40 @@ export const AddCustomerForm: React.FC<AddCustomerFormProps> = ({
               />
             </div>
 
-            {/* Row 5: Website */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Globe className="w-4 h-4 inline mr-1" />
-                Website
-              </label>
-              <input
-                type="url"
-                value={formData.customer_website}
-                onChange={(e) => handleInputChange('customer_website', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.customer_website ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="z.B. www.mustermann.de"
-                disabled={isSubmitting}
-              />
+            {/* Row 5: Website & Status */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Globe className="w-4 h-4 inline mr-1" />
+                  Website
+                </label>
+                <input
+                  type="url"
+                  value={formData.customer_website}
+                  onChange={(e) => handleInputChange('customer_website', e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.customer_website ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="z.B. www.mustermann.de"
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <CheckCircle className="w-4 h-4 inline mr-1" />
+                  Status
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => handleInputChange('status', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isSubmitting}
+                >
+                  <option value="Aktiv">Aktiv</option>
+                  <option value="Inaktiv">Inaktiv</option>
+                </select>
+              </div>
             </div>
 
             {/* Row 6: Logo Upload */}
