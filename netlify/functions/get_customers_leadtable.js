@@ -88,7 +88,7 @@ exports.handler = async (event, context) => {
     console.log('Supabase client created successfully');
 
     try {
-      const leadTableApiUrl = 'https://api.lead-table.com/api/v3/external/customer/all?page=1&limit=50';
+      const leadTableApiUrl = 'https://api.lead-table.com/api/v3/external/customer/all';
 
       console.log('Fetching all customers from Lead-Table API...');
 
@@ -96,8 +96,8 @@ exports.handler = async (event, context) => {
         method: 'GET',
         headers: {
           'email': leadTableEmail,
-          'Authorization': `Bearer ${leadTableApiKey}`,
-          'Accept': 'application/json',
+          'x-api-key': leadTableApiKey,
+          'accept': 'application/json',
         },
       });
 
@@ -113,7 +113,7 @@ exports.handler = async (event, context) => {
           statusCode: leadTableResponse.status,
           headers: {
             ...headers,
-            'Content-Type': 'application/json',
+            'Ctomers_leadtableontent-Type': 'application/json',
           },
           body: JSON.stringify({
             error: 'Lead-Table API Error',

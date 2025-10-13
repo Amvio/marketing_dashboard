@@ -156,8 +156,8 @@ exports.handler = async (event, context) => {
           method: 'GET',
           headers: {
             'email': leadTableEmail,
-            'Authorization': `Bearer ${leadTableApiKey}`,
-            'Accept': 'application/json',
+            'x-api-key': leadTableApiKey,
+            'accept': 'application/json',
           },
         });
 
