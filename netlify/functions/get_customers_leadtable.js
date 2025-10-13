@@ -88,7 +88,7 @@ exports.handler = async (event, context) => {
     console.log('Supabase client created successfully');
 
     try {
-      const leadTableApiUrl = 'https://api.lead-table.com/api/v3/external/customer/all';
+      const leadTableApiUrl = 'https://api.lead-table.com/api/v3/external/customer/all?page=1&limit=50';
 
       console.log('Fetching all customers from Lead-Table API...');
 
