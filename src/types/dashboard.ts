@@ -119,3 +119,33 @@ export interface DailyAggregatedMetrics {
   cpc: number;
   frequency: number;
 }
+
+export interface LeadTableLead {
+  id: number;
+  lead_id: string;
+  campaign_id: string;
+  name: string | null;
+  status: string | null;
+  utm_campaign: string | null;
+  utm_id: string | null;
+  owner_customer: string | null;
+  owner_table: string | null;
+  qualified: string;
+  customer_denied: string;
+  created_time: string | null;
+  last_change: string | null;
+  synced_at: string;
+}
+
+export interface LeadTableCampaign {
+  id: number;
+  campaign_id: string;
+  customer_id: number | null;
+  leadtable_customer_id: string;
+  occupation: string | null;
+  archived: boolean;
+  leads_count: number;
+  created_at: string | null;
+  last_change: string | null;
+  synced_at: string;
+}

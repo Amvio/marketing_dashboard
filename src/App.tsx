@@ -11,8 +11,8 @@ import { LeadChart } from './components/LeadChart';
 import { AdPerformanceTable } from './components/AdPerformanceTable';
 import { TaskManager } from './components/TaskManager';
 import { ChangelogManager } from './components/ChangelogManager';
-import { formatDateRange, getPreviousPeriodDateRange, getAggregatedMetricsForPeriod, generateDateRange, getDailyAggregatedChartData } from './utils/dateUtils';
-import { Customer, Adset, Task, Campaign, Ad, AdInsight } from './types/dashboard';
+import { formatDateRange, getPreviousPeriodDateRange, getAggregatedMetricsForPeriod, generateDateRange, getDailyAggregatedChartData, getLeadMetricsForPeriod, getDailyLeadCounts } from './utils/dateUtils';
+import { Customer, Adset, Task, Campaign, Ad, AdInsight, LeadTableLead, LeadTableCampaign } from './types/dashboard';
 import { MousePointer2, Eye, BarChart3, Users, ExternalLink, UserPlus, MessageSquare, CreditCard as Edit3, DollarSign, Target, TrendingUp, Printer, Repeat, Euro } from 'lucide-react';
 
 function getLast7Days() {
@@ -43,6 +43,8 @@ function App() {
   const [adInsights, setAdInsights] = useState<AdInsight[]>([]);
   const [adCreatives, setAdCreatives] = useState<any[]>([]);
   const [changelogEntries, setChangelogEntries] = useState<Array<{ date: string; title: string }>>([]);
+  const [leadTableLeads, setLeadTableLeads] = useState<LeadTableLead[]>([]);
+  const [leadTableCampaigns, setLeadTableCampaigns] = useState<LeadTableCampaign[]>([]);
 
   // Loading states
   const [loadingCustomers, setLoadingCustomers] = useState(true);
@@ -51,6 +53,8 @@ function App() {
   const [loadingAds, setLoadingAds] = useState(true);
   const [loadingInsights, setLoadingInsights] = useState(true);
   const [loadingCreatives, setLoadingCreatives] = useState(true);
+  const [loadingLeads, setLoadingLeads] = useState(true);
+  const [loadingLeadCampaigns, setLoadingLeadCampaigns] = useState(true);
   
   // Error states
   const [errorCustomers, setErrorCustomers] = useState<string | null>(null);
@@ -59,6 +63,8 @@ function App() {
   const [errorAds, setErrorAds] = useState<string | null>(null);
   const [errorInsights, setErrorInsights] = useState<string | null>(null);
   const [errorCreatives, setErrorCreatives] = useState<string | null>(null);
+  const [errorLeads, setErrorLeads] = useState<string | null>(null);
+  const [errorLeadCampaigns, setErrorLeadCampaigns] = useState<string | null>(null);
   
   // Date range state - initialize with last 7 days
   const { start: initialStartDate, end: initialEndDate } = getLast7Days();
@@ -200,7 +206,7 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-green-600',
+      color: 'bg-primary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 9
     },
@@ -210,7 +216,7 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-green-700',
+      color: 'bg-secondary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 10
     },
@@ -220,7 +226,7 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-green-700',
+      color: 'bg-secondary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 13
     },
@@ -230,17 +236,17 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-green-600',
+      color: 'bg-primary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 12
     },
     {
       id: 'follow-up-rate',
-      title: 'Follow-up Rate (%)',
+      title: 'Kundenabsage',
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-green-800',
+      color: 'bg-tertiary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 14
     },
@@ -250,7 +256,7 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-green-800',
+      color: 'bg-tertiary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 11
     },
@@ -463,6 +469,72 @@ function App() {
     fetchAdCreatives();
   }, []);
 
+  // Fetch leadtable_campaigns from Supabase
+  React.useEffect(() => {
+    const fetchLeadTableCampaigns = async () => {
+      setLoadingLeadCampaigns(true);
+      setErrorLeadCampaigns(null);
+
+      try {
+        console.log('Fetching leadtable_campaigns...');
+        const { data, error } = await supabase
+          .from('leadtable_campaigns')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        console.log('LeadTable campaigns data:', data);
+        console.log('LeadTable campaigns error:', error);
+
+        if (error) {
+          console.error('Error fetching leadtable_campaigns:', error);
+          setErrorLeadCampaigns(error.message);
+        } else {
+          setLeadTableCampaigns(data || []);
+        }
+      } catch (err) {
+        console.error('Exception fetching leadtable_campaigns:', err);
+        setErrorLeadCampaigns(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setLoadingLeadCampaigns(false);
+      }
+    };
+
+    fetchLeadTableCampaigns();
+  }, []);
+
+  // Fetch leadtable_leads from Supabase
+  React.useEffect(() => {
+    const fetchLeadTableLeads = async () => {
+      setLoadingLeads(true);
+      setErrorLeads(null);
+
+      try {
+        console.log('Fetching leadtable_leads...');
+        const { data, error } = await supabase
+          .from('leadtable_leads')
+          .select('*')
+          .order('created_time', { ascending: false });
+
+        console.log('LeadTable leads data:', data);
+        console.log('LeadTable leads error:', error);
+
+        if (error) {
+          console.error('Error fetching leadtable_leads:', error);
+          setErrorLeads(error.message);
+        } else {
+          setLeadTableLeads(data || []);
+        }
+      } catch (err) {
+        console.error('Exception fetching leadtable_leads:', err);
+        setErrorLeads(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setLoadingLeads(false);
+      }
+    };
+
+    fetchLeadTableLeads();
+  }, []);
+
   // Fetch changelog entries
   React.useEffect(() => {
     const fetchChangelogEntries = async () => {
@@ -524,7 +596,7 @@ function App() {
       selectedAdIds,
       supabaseCampaigns
     );
-    
+
     const updatedPreviousPeriodRange = getPreviousPeriodDateRange(startDate, endDate);
     const updatedPreviousMetrics = getAggregatedMetricsForPeriod(
       adInsights,
@@ -536,9 +608,9 @@ function App() {
       selectedAdIds,
       supabaseCampaigns
     );
-    
+
     const updatedDailyDateRange = generateDateRange(startDate, endDate);
-    
+
     // Get daily aggregated chart data from ad_insights
     const dailyChartData = getDailyAggregatedChartData(
       adInsights,
@@ -549,6 +621,61 @@ function App() {
       selectedAdIds,
       supabaseCampaigns
     );
+
+    // Get lead metrics for current and previous periods
+    const currentLeadMetrics = getLeadMetricsForPeriod(
+      leadTableLeads,
+      leadTableCampaigns,
+      startDate,
+      endDate,
+      selectedCustomer,
+      selectedCampaignIds
+    );
+
+    const previousLeadMetrics = getLeadMetricsForPeriod(
+      leadTableLeads,
+      leadTableCampaigns,
+      updatedPreviousPeriodRange.startDate,
+      updatedPreviousPeriodRange.endDate,
+      selectedCustomer,
+      selectedCampaignIds
+    );
+
+    // Get daily lead counts
+    const dailyLeadData = getDailyLeadCounts(
+      leadTableLeads,
+      leadTableCampaigns,
+      updatedDailyDateRange,
+      selectedCustomer,
+      selectedCampaignIds
+    );
+
+    // Calculate conversion rate (leads / clicks * 100)
+    const currentConversionRate = updatedCurrentMetrics.clicks > 0
+      ? (currentLeadMetrics.totalLeads / updatedCurrentMetrics.clicks) * 100
+      : 0;
+    const previousConversionRate = updatedPreviousMetrics.clicks > 0
+      ? (previousLeadMetrics.totalLeads / updatedPreviousMetrics.clicks) * 100
+      : 0;
+
+    // Calculate cost per lead
+    const currentCostPerLead = currentLeadMetrics.totalLeads > 0
+      ? updatedCurrentMetrics.spend / currentLeadMetrics.totalLeads
+      : 0;
+    const previousCostPerLead = previousLeadMetrics.totalLeads > 0
+      ? updatedPreviousMetrics.spend / previousLeadMetrics.totalLeads
+      : 0;
+
+    // Calculate daily conversion rates and cost per lead
+    const dailyConversionRates = dailyLeadData.map((dayLead, index) => {
+      const dayClicks = dailyChartData[index]?.clicks || 0;
+      return dayClicks > 0 ? (dayLead.totalLeads / dayClicks) * 100 : 0;
+    });
+
+    const dailyCostPerLead = dailyLeadData.map((dayLead, index) => {
+      const daySpend = dailyChartData[index]?.spend || 0;
+      return dayLead.totalLeads > 0 ? daySpend / dayLead.totalLeads : 0;
+    });
     
     setMetricsData([
       // Row 1: Reichweite, Impressionen, Klicks, CTR, Frequenz, Ausgaben
@@ -616,60 +743,60 @@ function App() {
       {
         id: 'leads',
         title: 'Leads',
-        value: 0,
-        previousValue: 0,
-        chartData: updatedDailyDateRange.map(() => 0),
-        color: 'bg-green-600',
+        value: currentLeadMetrics.totalLeads,
+        previousValue: previousLeadMetrics.totalLeads,
+        chartData: dailyLeadData.map(d => d.totalLeads),
+        color: 'bg-primary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 9
       },
       {
         id: 'qualified-leads',
         title: 'Qualifizierte Leads',
-        value: 0,
-        previousValue: 0,
-        chartData: updatedDailyDateRange.map(() => 0),
-        color: 'bg-green-700',
+        value: currentLeadMetrics.qualifiedLeads,
+        previousValue: previousLeadMetrics.qualifiedLeads,
+        chartData: dailyLeadData.map(d => d.qualifiedLeads),
+        color: 'bg-secondary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 10
       },
       {
         id: 'lead-quality',
-        title: 'Lead Qualität',
-        value: 0,
-        previousValue: 0,
-        chartData: updatedDailyDateRange.map(() => 0),
-        color: 'bg-green-700',
+        title: 'Lead Qualität (%)',
+        value: Math.round(currentLeadMetrics.leadQuality * 100) / 100,
+        previousValue: Math.round(previousLeadMetrics.leadQuality * 100) / 100,
+        chartData: dailyLeadData.map(d => Math.round(d.leadQuality * 100) / 100),
+        color: 'bg-secondary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 13
       },
       {
         id: 'conversion-rate',
         title: 'Conversion Rate (%)',
-        value: 0,
-        previousValue: 0,
-        chartData: updatedDailyDateRange.map(() => 0),
-        color: 'bg-green-600',
+        value: Math.round(currentConversionRate * 100) / 100,
+        previousValue: Math.round(previousConversionRate * 100) / 100,
+        chartData: dailyConversionRates.map(d => Math.round(d * 100) / 100),
+        color: 'bg-primary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 12
       },
       {
         id: 'follow-up-rate',
-        title: 'Follow-up Rate (%)',
-        value: 0,
-        previousValue: 0,
-        chartData: updatedDailyDateRange.map(() => 0),
-        color: 'bg-green-800',
+        title: 'Kundenabsage',
+        value: currentLeadMetrics.followUpRate,
+        previousValue: previousLeadMetrics.followUpRate,
+        chartData: dailyLeadData.map(d => d.followUpRate),
+        color: 'bg-tertiary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 14
       },
       {
         id: 'cost-per-lead',
         title: 'Kosten pro Lead',
-        value: 0,
-        previousValue: 0,
-        chartData: updatedDailyDateRange.map(() => 0),
-        color: 'bg-green-800',
+        value: Math.round(currentCostPerLead * 100) / 100,
+        previousValue: Math.round(previousCostPerLead * 100) / 100,
+        chartData: dailyCostPerLead.map(d => Math.round(d * 100) / 100),
+        color: 'bg-tertiary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 11
       },
@@ -695,7 +822,7 @@ function App() {
         libraryId: 8
       }
     ]);
-  }, [selectedCustomer, selectedCampaignIds, selectedAdsetIds, selectedAdIds, startDate, endDate, adInsights, supabaseCampaigns]);
+  }, [selectedCustomer, selectedCampaignIds, selectedAdsetIds, selectedAdIds, startDate, endDate, adInsights, supabaseCampaigns, leadTableLeads, leadTableCampaigns]);
 
   // Early return for loading state - moved after all hooks
   if (!selectedCustomer) {

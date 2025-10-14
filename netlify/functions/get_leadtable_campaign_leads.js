@@ -31,7 +31,15 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    console.log('Fetching Lead-Table leads for all campaigns...');
+    const customerIds = event.queryStringParameters?.customerIds
+      ? event.queryStringParameters.customerIds.split(',').map(id => id.trim())
+      : null;
+
+    if (customerIds) {
+      console.log(`Fetching Lead-Table leads for ${customerIds.length} selected customers...`);
+    } else {
+      console.log('Fetching Lead-Table leads for all campaigns...');
+    }
 
     const leadTableApiKey = process.env.LEADTABLE_API_KEY;
     const leadTableEmail = process.env.LEADTABLE_EMAIL;
@@ -87,11 +95,18 @@ exports.handler = async (event, context) => {
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
     console.log('Supabase client created successfully');
 
-    // Fetch all campaigns from leadtable_campaigns table
+    // Fetch campaigns from leadtable_campaigns table (filtered by customer_id if provided)
     console.log('Fetching campaigns from leadtable_campaigns table...');
-    const { data: campaigns, error: campaignsError } = await supabase
+    let campaignsQuery = supabase
       .from('leadtable_campaigns')
       .select('campaign_id, occupation, customer_id, leadtable_customer_id');
+
+    if (customerIds && customerIds.length > 0) {
+      campaignsQuery = campaignsQuery.in('customer_id', customerIds);
+      console.log(`Filtering campaigns for customer_ids: ${customerIds.join(', ')}`);
+    }
+
+    const { data: campaigns, error: campaignsError } = await campaignsQuery;
 
     if (campaignsError) {
       console.error('Error fetching campaigns:', campaignsError);

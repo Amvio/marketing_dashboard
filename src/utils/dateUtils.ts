@@ -1,4 +1,4 @@
-import { AdInsight, DailyAggregatedMetrics, Customer, Campaign } from '../types/dashboard';
+import { AdInsight, DailyAggregatedMetrics, Customer, Campaign, LeadTableLead, LeadTableCampaign } from '../types/dashboard';
 
 // Helper function to format date as YYYY-MM-DD string
 const formatDateString = (date: Date): string => {
@@ -202,5 +202,99 @@ export const getAggregatedMetricsForPeriod = (
     cpm: 0,
     cpc: 0,
     frequency: 0
+  });
+};
+
+export const getLeadMetricsForPeriod = (
+  leadTableLeads: LeadTableLead[],
+  leadTableCampaigns: LeadTableCampaign[],
+  startDate: Date,
+  endDate: Date,
+  selectedCustomer: Customer | null,
+  selectedCampaignIds: string[]
+) => {
+  const startDateString = formatDateString(startDate);
+  const endDateString = formatDateString(endDate);
+
+  const customerCampaignIds = leadTableCampaigns
+    .filter(c => selectedCustomer ? c.customer_id === selectedCustomer.customer_id : true)
+    .map(c => c.campaign_id);
+
+  const filteredLeads = leadTableLeads.filter(lead => {
+    if (!lead.created_time) return false;
+
+    const leadDate = lead.created_time.split('T')[0];
+    const isInDateRange = leadDate >= startDateString && leadDate <= endDateString;
+
+    let matchesHierarchy = true;
+
+    if (selectedCampaignIds.length > 0) {
+      matchesHierarchy = selectedCampaignIds.includes(lead.campaign_id);
+    } else if (selectedCustomer) {
+      matchesHierarchy = customerCampaignIds.includes(lead.campaign_id);
+    }
+
+    return isInDateRange && matchesHierarchy;
+  });
+
+  const totalLeads = filteredLeads.length;
+  const qualifiedLeads = filteredLeads.filter(lead => lead.qualified === 'YES').length;
+  const customerDenied = filteredLeads.filter(lead => lead.customer_denied === 'YES').length;
+
+  const leadQuality = totalLeads > 0 ? (qualifiedLeads / totalLeads) * 100 : 0;
+  const followUpRate = customerDenied;
+
+  return {
+    totalLeads,
+    qualifiedLeads,
+    customerDenied,
+    leadQuality,
+    followUpRate
+  };
+};
+
+export const getDailyLeadCounts = (
+  leadTableLeads: LeadTableLead[],
+  leadTableCampaigns: LeadTableCampaign[],
+  dateRange: string[],
+  selectedCustomer: Customer | null,
+  selectedCampaignIds: string[]
+) => {
+  const customerCampaignIds = leadTableCampaigns
+    .filter(c => selectedCustomer ? c.customer_id === selectedCustomer.customer_id : true)
+    .map(c => c.campaign_id);
+
+  return dateRange.map(currentDayString => {
+    const dayLeads = leadTableLeads.filter(lead => {
+      if (!lead.created_time) return false;
+
+      const leadDate = lead.created_time.split('T')[0];
+      const isSameDay = leadDate === currentDayString;
+
+      if (!isSameDay) return false;
+
+      let matchesHierarchy = true;
+
+      if (selectedCampaignIds.length > 0) {
+        matchesHierarchy = selectedCampaignIds.includes(lead.campaign_id);
+      } else if (selectedCustomer) {
+        matchesHierarchy = customerCampaignIds.includes(lead.campaign_id);
+      }
+
+      return matchesHierarchy;
+    });
+
+    const totalLeads = dayLeads.length;
+    const qualifiedLeads = dayLeads.filter(lead => lead.qualified === 'YES').length;
+    const customerDenied = dayLeads.filter(lead => lead.customer_denied === 'YES').length;
+
+    return {
+      date: formatDisplayDate(currentDayString),
+      totalLeads,
+      qualifiedLeads,
+      customerDenied,
+      leadQuality: totalLeads > 0 ? (qualifiedLeads / totalLeads) * 100 : 0,
+      followUpRate: customerDenied
+    };
   });
 };

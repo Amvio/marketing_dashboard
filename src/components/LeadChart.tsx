@@ -29,9 +29,9 @@ export const LeadChart: React.FC<LeadChartProps> = ({ data, metricsData, changel
   const maxValue1 = Math.ceil(dataMax1 * 1.2); // Add 20% padding
   const maxValue2 = Math.ceil(dataMax2 * 1.2); // Add 20% padding
   
-  // Fixed colors
-  const metricColor1 = '#1e3a8a'; // Dark blue
-  const metricColor2 = '#166534'; // Dark green
+  // Fixed colors - matching dashboard blue theme
+  const metricColor1 = '#3b82f6'; // Vibrant primary blue
+  const metricColor2 = '#0ea5e9'; // Complementary secondary blue (cyan)
 
   // Create line chart points for dual axis
   const createLinePath = (chartData: number[], maxValue: number) => {

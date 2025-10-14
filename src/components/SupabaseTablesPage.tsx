@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Database, ArrowLeft, Table, Eye, CheckCircle, XCircle, RefreshCw, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Database, ArrowLeft, Table, Eye, CheckCircle, XCircle, RefreshCw, Search, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { chunkDateRange, DateChunk } from '../utils/chunkUtils';
-import { ChunkProgressModal } from './ChunkProgressModal';
 
 interface SupabaseTablesPageProps {
   onBack: () => void;
@@ -25,7 +23,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loadingAdsAbfrage, setLoadingAdsAbfrage] = useState(false);
   const [loadingCreativesAbfrage, setLoadingCreativesAbfrage] = useState(false);
   const [loadingCreativeImagesAbfrage, setLoadingCreativeImagesAbfrage] = useState(false);
-  const [loadingCustomersLeadtableAbfrage, setLoadingCustomersLeadtableAbfrage] = useState(false);
+  const [loadingKundenAbfrage, setLoadingKundenAbfrage] = useState(false);
   const [loadingLeadtableCampaignsAbfrage, setLoadingLeadtableCampaignsAbfrage] = useState(false);
   const [loadingLeadtableLeadsAbfrage, setLoadingLeadtableLeadsAbfrage] = useState(false);
   const [loadingInsightsAbfrage, setLoadingInsightsAbfrage] = useState(false);
@@ -39,20 +37,10 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [insightsEndDate, setInsightsEndDate] = useState<string>('');
   const [loadingInsightsDateInit, setLoadingInsightsDateInit] = useState(false);
   const [insightsStatusFilter, setInsightsStatusFilter] = useState<'active' | 'all'>('all');
-  const [chunkProgressModal, setChunkProgressModal] = useState({
-    isOpen: false,
-    currentChunk: 0,
-    totalChunks: 0,
-    chunkStartDate: '',
-    chunkEndDate: '',
-    overallStartDate: '',
-    overallEndDate: '',
-    itemsProcessed: 0,
-    status: 'processing' as 'processing' | 'completed' | 'error' | 'timeout',
-    errorMessage: '',
-  });
-  const [cancelChunking, setCancelChunking] = useState(false);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [showLeadsSelectionPopup, setShowLeadsSelectionPopup] = useState(false);
+  const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
+  const [customersList, setCustomersList] = useState<any[]>([]);
+  const [loadingLeadsForCustomers, setLoadingLeadsForCustomers] = useState(false);
 
   // Standalone handler for ad_accounts Abfrage
   const handleAbfrageAdAccounts = async () => {
@@ -256,13 +244,13 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     fetchAdAccounts();
   }, []);
 
-  // Handler for fetching customers leadtable
-  const handleAbfrageCustomersLeadtable = async () => {
-    setLoadingCustomersLeadtableAbfrage(true);
-    addConsoleMessage?.('Calling Netlify function for customers_leadtable...');
+  // Handler for fetching customers from Lead-Table API to Kunden table
+  const handleAbfrageKunden = async () => {
+    setLoadingKundenAbfrage(true);
+    addConsoleMessage?.('Calling Netlify function to sync Lead-Table customers to Kunden table...');
 
     try {
-      console.log('Calling Netlify function for customers_leadtable...');
+      console.log('Calling Netlify function to sync Lead-Table customers to Kunden table...');
       const response = await fetch('/api/get_customers_leadtable', {
         method: 'GET',
         headers: {
@@ -289,14 +277,14 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       console.log('Netlify function response:', data);
       addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
 
-      // Refresh the customers_leadtable table data after successful sync
-      await fetchTableData('customers_leadtable');
-      addConsoleMessage?.('Customers leadtable refreshed after sync');
+      // Refresh the Kunden table data after successful sync
+      await fetchTableData('Kunden');
+      addConsoleMessage?.('Kunden table refreshed after Lead-Table sync');
     } catch (error) {
       console.error('Error calling Netlify function:', error);
       addConsoleMessage?.(`Error calling Netlify function: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      setLoadingCustomersLeadtableAbfrage(false);
+      setLoadingKundenAbfrage(false);
     }
   };
 
@@ -345,6 +333,96 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   };
 
   // Handler for fetching leadtable leads
+  const handleOpenLeadsSelection = async () => {
+    setShowLeadsSelectionPopup(true);
+
+    try {
+      const { data: customers, error } = await supabase
+        .from('Kunden')
+        .select('customer_id, customer_name, status')
+        .order('customer_name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching customers:', error);
+        addConsoleMessage?.(`Error fetching customers: ${error.message}`);
+        setCustomersList([]);
+        return;
+      }
+
+      console.log('Customers loaded:', customers);
+      setCustomersList(customers || []);
+      addConsoleMessage?.(`Loaded ${customers?.length || 0} customers`);
+    } catch (error) {
+      console.error('Error loading customers:', error);
+      addConsoleMessage?.(`Error loading customers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setCustomersList([]);
+    }
+  };
+
+  const toggleCustomerSelection = (customerId: string) => {
+    console.log('Toggle customer selection called for:', customerId);
+    setSelectedCustomers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(customerId)) {
+        console.log('Removing customer:', customerId);
+        newSet.delete(customerId);
+      } else {
+        console.log('Adding customer:', customerId);
+        newSet.add(customerId);
+      }
+      console.log('New selection set:', Array.from(newSet));
+      return newSet;
+    });
+  };
+
+  const handleFetchLeadsForSelectedCustomers = async () => {
+    if (selectedCustomers.size === 0) {
+      addConsoleMessage?.('Error: Please select at least one customer');
+      return;
+    }
+
+    setLoadingLeadsForCustomers(true);
+    setShowLeadsSelectionPopup(false);
+    addConsoleMessage?.(`Fetching leads for ${selectedCustomers.size} selected customers...`);
+
+    try {
+      const customerIds = Array.from(selectedCustomers);
+      const response = await fetch(`/api/get_leadtable_campaign_leads?customerIds=${customerIds.join(',')}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Leads fetch response:', data);
+      addConsoleMessage?.(`Leads fetch completed: ${JSON.stringify(data, null, 2)}`);
+
+      await fetchTableData('leadtable_leads');
+      addConsoleMessage?.('Lead-Table leads refreshed after sync');
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+      addConsoleMessage?.(`Error fetching leads: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingLeadsForCustomers(false);
+    }
+  };
+
   const handleAbfrageLeadtableLeads = async () => {
     setLoadingLeadtableLeadsAbfrage(true);
     addConsoleMessage?.('Calling Netlify function for leadtable_leads...');
@@ -546,200 +624,44 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
 
     setLoadingInsightsAbfrage(true);
     setShowInsightsStatusPopup(false);
-    setCancelChunking(false);
-    addConsoleMessage?.(`Starting chunked insights fetch from ${insightsStartDate} to ${insightsEndDate} (${insightsStatusFilter})...`);
+    addConsoleMessage?.(`Fetching insights from ${insightsStartDate} to ${insightsEndDate} (${insightsStatusFilter})...`);
 
     try {
-      const { chunks, totalChunks } = chunkDateRange(insightsStartDate, insightsEndDate, 3);
-      console.log(`Date range split into ${totalChunks} chunks of 3 days each`);
-      addConsoleMessage?.(`Date range split into ${totalChunks} chunks`);
+      const statusParam = insightsStatusFilter === 'active' ? '&statusFilter=active' : '';
+      const response = await fetch(
+        `/api/get_ad_insights?startDate=${insightsStartDate}&endDate=${insightsEndDate}${statusParam}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
 
-      const jobData = {
-        job_type: 'ad_insights',
-        status: 'running',
-        total_chunks: totalChunks,
-        completed_chunks: 0,
-        current_chunk: 1,
-        start_date: insightsStartDate,
-        end_date: insightsEndDate,
-        current_chunk_start: chunks[0].startDate,
-        current_chunk_end: chunks[0].endDate,
-        total_items_processed: 0,
-        metadata: JSON.stringify({ statusFilter: insightsStatusFilter })
-      };
-
-      const { data: job, error: jobError } = await supabase
-        .from('sync_jobs')
-        .insert(jobData)
-        .select()
-        .single();
-
-      if (jobError) {
-        console.error('Error creating sync job:', jobError);
-        addConsoleMessage?.(`Error creating sync job: ${jobError.message}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
         return;
       }
 
-      setCurrentJobId(job.id);
-
-      setChunkProgressModal({
-        isOpen: true,
-        currentChunk: 0,
-        totalChunks,
-        chunkStartDate: chunks[0].startDate,
-        chunkEndDate: chunks[0].endDate,
-        overallStartDate: insightsStartDate,
-        overallEndDate: insightsEndDate,
-        itemsProcessed: 0,
-        status: 'processing',
-        errorMessage: ''
-      });
-
-      let totalItemsProcessed = 0;
-      let hasTimeout = false;
-
-      for (let i = 0; i < chunks.length; i++) {
-        if (cancelChunking) {
-          console.log('Chunking cancelled by user');
-          addConsoleMessage?.('Chunking cancelled by user');
-          await supabase
-            .from('sync_jobs')
-            .update({ status: 'paused', updated_at: new Date().toISOString() })
-            .eq('id', job.id);
-          break;
-        }
-
-        const chunk = chunks[i];
-        console.log(`Processing chunk ${i + 1}/${totalChunks}: ${chunk.startDate} to ${chunk.endDate}`);
-        addConsoleMessage?.(`Processing chunk ${i + 1}/${totalChunks}: ${chunk.startDate} to ${chunk.endDate}`);
-
-        setChunkProgressModal(prev => ({
-          ...prev,
-          currentChunk: i + 1,
-          chunkStartDate: chunk.startDate,
-          chunkEndDate: chunk.endDate
-        }));
-
-        await supabase
-          .from('sync_jobs')
-          .update({
-            current_chunk: i + 1,
-            current_chunk_start: chunk.startDate,
-            current_chunk_end: chunk.endDate,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', job.id);
-
-        try {
-          const statusParam = insightsStatusFilter === 'active' ? '&statusFilter=active' : '';
-          const response = await fetch(
-            `/api/get_ad_insights?startDate=${chunk.startDate}&endDate=${chunk.endDate}${statusParam}&jobId=${job.id}`,
-            {
-              method: 'GET',
-              headers: { 'Content-Type': 'application/json' }
-            }
-          );
-
-          if (!response.ok && response.status !== 206) {
-            const errorText = await response.text();
-            console.error('Netlify function error:', errorText);
-            addConsoleMessage?.(`Netlify function error: ${errorText}`);
-            throw new Error(errorText);
-          }
-
-          const data = await response.json();
-          console.log(`Chunk ${i + 1} response:`, data);
-          addConsoleMessage?.(`Chunk ${i + 1} completed: ${data.supabaseSync?.processed || 0} items`);
-
-          totalItemsProcessed += data.supabaseSync?.processed || 0;
-
-          if (data.timeout?.occurred) {
-            hasTimeout = true;
-            console.log('Timeout detected in chunk response');
-            addConsoleMessage?.(`Timeout detected in chunk ${i + 1}: ${data.message}`);
-
-            setChunkProgressModal(prev => ({
-              ...prev,
-              status: 'timeout',
-              itemsProcessed: totalItemsProcessed,
-              errorMessage: data.message || 'Function timed out during processing'
-            }));
-          } else {
-            setChunkProgressModal(prev => ({
-              ...prev,
-              itemsProcessed: totalItemsProcessed
-            }));
-          }
-
-          await supabase
-            .from('sync_jobs')
-            .update({
-              completed_chunks: i + 1,
-              total_items_processed: totalItemsProcessed,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', job.id);
-
-          if (i < chunks.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        } catch (chunkError) {
-          console.error(`Error processing chunk ${i + 1}:`, chunkError);
-          addConsoleMessage?.(`Error in chunk ${i + 1}: ${chunkError instanceof Error ? chunkError.message : 'Unknown error'}`);
-
-          await supabase
-            .from('sync_jobs')
-            .update({
-              status: 'failed',
-              error_message: chunkError instanceof Error ? chunkError.message : 'Unknown error',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', job.id);
-
-          setChunkProgressModal(prev => ({
-            ...prev,
-            status: 'error',
-            errorMessage: chunkError instanceof Error ? chunkError.message : 'Unknown error'
-          }));
-
-          return;
-        }
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
       }
 
-      if (!cancelChunking && !hasTimeout) {
-        await supabase
-          .from('sync_jobs')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', job.id);
-
-        setChunkProgressModal(prev => ({
-          ...prev,
-          status: 'completed',
-          itemsProcessed: totalItemsProcessed
-        }));
-
-        console.log(`All chunks completed. Total items processed: ${totalItemsProcessed}`);
-        addConsoleMessage?.(`All chunks completed successfully! Total items: ${totalItemsProcessed}`);
-      }
+      const data = await response.json();
+      console.log('Ad insights response:', data);
+      addConsoleMessage?.(`Insights fetch completed: ${data.supabaseSync?.processed || 0} items processed`);
 
       await fetchTableData('ad_insights');
       addConsoleMessage?.('Ad insights table refreshed after sync');
     } catch (error) {
-      console.error('Error in chunked insights fetch:', error);
+      console.error('Error fetching insights:', error);
       addConsoleMessage?.(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-
-      setChunkProgressModal(prev => ({
-        ...prev,
-        status: 'error',
-        errorMessage: error instanceof Error ? error.message : 'Unknown error'
-      }));
     } finally {
       setLoadingInsightsAbfrage(false);
-      setCurrentJobId(null);
     }
   };
   const refreshAllTables = async () => {
@@ -759,7 +681,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     'ad_insights',
     'Kunden',
     'customer_tasks',
-    'customers_leadtable',
+    'changelog',
     'leadtable_campaigns',
     'leadtable_leads',
     'dashboard_users',
@@ -936,14 +858,14 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                               <span>Abfrage</span>
                             </button>
                           )}
-                          {tableName === 'customers_leadtable' && (
+                          {tableName === 'Kunden' && (
                             <button
-                              onClick={handleAbfrageCustomersLeadtable}
-                              disabled={loadingCustomersLeadtableAbfrage}
+                              onClick={handleAbfrageKunden}
+                              disabled={loadingKundenAbfrage}
                               className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
-                              title="Customers Leadtable Daten abrufen"
+                              title="Kunden von Lead-Table API abrufen"
                             >
-                              {loadingCustomersLeadtableAbfrage ? (
+                              {loadingKundenAbfrage ? (
                                 <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
                               ) : (
                                 <Search className="w-3 h-3" />
@@ -968,12 +890,12 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                           )}
                           {tableName === 'leadtable_leads' && (
                             <button
-                              onClick={handleAbfrageLeadtableLeads}
-                              disabled={loadingLeadtableLeadsAbfrage}
+                              onClick={handleOpenLeadsSelection}
+                              disabled={loadingLeadtableLeadsAbfrage || loadingLeadsForCustomers}
                               className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
-                              title="Lead-Table Leads für alle Kampagnen abrufen"
+                              title="Lead-Table Leads für ausgewählte Kunden abrufen"
                             >
-                              {loadingLeadtableLeadsAbfrage ? (
+                              {(loadingLeadtableLeadsAbfrage || loadingLeadsForCustomers) ? (
                                 <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
                               ) : (
                                 <Search className="w-3 h-3" />
@@ -1176,9 +1098,10 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
           
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div 
+            <div
               className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 min-w-64 max-h-60 overflow-y-auto"
               style={{ backgroundColor: 'white' }}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="p-2" style={{ backgroundColor: 'white' }}>
                 <button
@@ -1237,6 +1160,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
             <div
               className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 min-w-64 max-h-60 overflow-y-auto"
               style={{ backgroundColor: 'white' }}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="p-2" style={{ backgroundColor: 'white' }}>
                 <button
@@ -1295,6 +1219,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
             <div
               className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 p-6"
               style={{ minWidth: '300px', backgroundColor: 'white' }}
+              onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Ad Account</h3>
               <div className="mb-4">
@@ -1349,6 +1274,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
             <div
               className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 w-full max-w-md"
               style={{ backgroundColor: 'white' }}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6" style={{ backgroundColor: 'white' }}>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -1392,26 +1318,30 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Ad Status
                       </label>
-                      <div className="flex space-x-2">
+                      <div className="flex gap-2">
                         <button
+                          type="button"
                           onClick={() => setInsightsStatusFilter('all')}
-                          className={`flex-1 px-4 py-2 rounded-lg transition-colors duration-150 ${
+                          className={`flex-1 px-4 py-2 rounded-lg transition-all duration-150 flex items-center justify-center gap-2 ${
                             insightsStatusFilter === 'all'
-                              ? 'bg-blue-600 text-white'
+                              ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-600 ring-offset-2'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                         >
-                          Alle Ads
+                          {insightsStatusFilter === 'all' && <Check className="w-4 h-4" />}
+                          <span>Alle Ads</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => setInsightsStatusFilter('active')}
-                          className={`flex-1 px-4 py-2 rounded-lg transition-colors duration-150 ${
+                          className={`flex-1 px-4 py-2 rounded-lg transition-all duration-150 flex items-center justify-center gap-2 ${
                             insightsStatusFilter === 'active'
-                              ? 'bg-blue-600 text-white'
+                              ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-600 ring-offset-2'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                         >
-                          Nur aktive Ads
+                          {insightsStatusFilter === 'active' && <Check className="w-4 h-4" />}
+                          <span>Nur aktive Ads</span>
                         </button>
                       </div>
                     </div>
@@ -1460,22 +1390,104 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
         </>
       )}
 
-      {/* Chunk Progress Modal */}
-      <ChunkProgressModal
-        isOpen={chunkProgressModal.isOpen}
-        onClose={() => setChunkProgressModal(prev => ({ ...prev, isOpen: false }))}
-        currentChunk={chunkProgressModal.currentChunk}
-        totalChunks={chunkProgressModal.totalChunks}
-        chunkStartDate={chunkProgressModal.chunkStartDate}
-        chunkEndDate={chunkProgressModal.chunkEndDate}
-        overallStartDate={chunkProgressModal.overallStartDate}
-        overallEndDate={chunkProgressModal.overallEndDate}
-        itemsProcessed={chunkProgressModal.itemsProcessed}
-        status={chunkProgressModal.status}
-        errorMessage={chunkProgressModal.errorMessage}
-        canCancel={chunkProgressModal.status === 'processing'}
-        onCancel={() => setCancelChunking(true)}
-      />
+      {/* Customer Selection Popup for Leads */}
+      {showLeadsSelectionPopup && (
+        <>
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowLeadsSelectionPopup(false)}></div>
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg" style={{ backgroundColor: 'white' }} onClick={(e) => e.stopPropagation()}>
+              <div className="p-6" style={{ backgroundColor: 'white' }}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Kunden auswählen
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Wählen Sie die Kunden aus, für die Sie Leads abrufen möchten.
+                </p>
+
+                {/* Customer Selection List */}
+                <div className="border border-gray-300 rounded-lg max-h-96 overflow-y-auto mb-4">
+                  {customersList.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      Keine Kunden gefunden
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-200">
+                      {customersList.map((customer) => (
+                        <button
+                          type="button"
+                          key={customer.customer_id}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Customer clicked:', customer.customer_id);
+                            toggleCustomerSelection(customer.customer_id);
+                          }}
+                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors duration-150 text-left"
+                        >
+                          <div className="flex items-center space-x-3 flex-1">
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors duration-150 ${
+                              selectedCustomers.has(customer.customer_id)
+                                ? 'bg-blue-600 border-blue-600'
+                                : 'border-gray-300'
+                            }`}>
+                              {selectedCustomers.has(customer.customer_id) && (
+                                <Check className="w-3 h-3 text-white" />
+                              )}
+                            </div>
+                            <div className="font-medium text-gray-900">{customer.customer_name}</div>
+                          </div>
+                          {customer.status && (
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              customer.status === 'Aktiv'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {customer.status}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Selection Summary */}
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>{selectedCustomers.size}</strong> Kunde{selectedCustomers.size !== 1 ? 'n' : ''} ausgewählt
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleFetchLeadsForSelectedCustomers}
+                    disabled={selectedCustomers.size === 0 || loadingLeadsForCustomers}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    {loadingLeadsForCustomers ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Lädt...</span>
+                      </>
+                    ) : (
+                      <span>Leads abrufen</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowLeadsSelectionPopup(false)}
+                    disabled={loadingLeadsForCustomers}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
     </div>
   );
 };
