@@ -162,7 +162,7 @@ exports.handler = async (event, context) => {
       try {
         syncResults.campaignsProcessed++;
 
-        const leadTableApiUrl = `https://api.lead-table.com/api/v3/external/lead/campaign/${campaign.campaign_id}`;
+        const leadTableApiUrl = `https://api.lead-table.com/api/v3/external/lead/campaign/${campaign.campaign_id}?page=1&limit=750`;
 
         console.log(`Fetching leads for campaign ${campaign.campaign_id} (${campaign.occupation || 'N/A'})...`);
 
