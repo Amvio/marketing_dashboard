@@ -181,7 +181,7 @@ exports.handler = async (event, context) => {
       const creativeUrl = `https://graph.facebook.com/v19.0/${creativeId}`;
       const creativeParams = new URLSearchParams({
         access_token: accessToken,
-        fields: 'id,name,object_story_spec,asset_feed_spec,created_time,updated_time',
+        fields: 'id,name,object_story_spec,asset_feed_spec',
       });
 
       try {
