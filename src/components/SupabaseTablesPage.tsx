@@ -29,6 +29,18 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loadingInsightsAbfrage, setLoadingInsightsAbfrage] = useState(false);
   const [showAdsetStatusPopup, setShowAdsetStatusPopup] = useState(false);
   const [showCreativesStatusPopup, setShowCreativesStatusPopup] = useState(false);
+  const [showCreativesSelectionPopup, setShowCreativesSelectionPopup] = useState(false);
+  const [selectedAds, setSelectedAds] = useState<Set<string>>(new Set());
+  const [adsList, setAdsList] = useState<any[]>([]);
+  const [loadingCreativesForAds, setLoadingCreativesForAds] = useState(false);
+  const [selectedAdsCustomers, setSelectedAdsCustomers] = useState<Set<string>>(new Set());
+  const [adsCustomersList, setAdsCustomersList] = useState<any[]>([]);
+  const [showCreativesAdsetSelectionPopup, setShowCreativesAdsetSelectionPopup] = useState(false);
+  const [selectedCreativesAdsets, setSelectedCreativesAdsets] = useState<Set<string>>(new Set());
+  const [creativesAdsetsList, setCreativesAdsetsList] = useState<any[]>([]);
+  const [loadingCreativesForAdsets, setLoadingCreativesForAdsets] = useState(false);
+  const [selectedCreativesCustomers, setSelectedCreativesCustomers] = useState<Set<string>>(new Set());
+  const [creativesCustomersList, setCreativesCustomersList] = useState<any[]>([]);
   const [showCreativeImagesPopup, setShowCreativeImagesPopup] = useState(false);
   const [selectedAdAccountId, setSelectedAdAccountId] = useState<string>('');
   const [adAccounts, setAdAccounts] = useState<any[]>([]);
@@ -629,6 +641,284 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   };
 
   // Standalone handler for ad creatives Abfrage
+  const handleOpenCreativesSelection = async () => {
+    setShowCreativesSelectionPopup(true);
+
+    try {
+      // Fetch customers
+      const { data: customers, error: customersError } = await supabase
+        .from('Kunden')
+        .select('customer_id, customer_name, status')
+        .order('customer_name', { ascending: true });
+
+      if (customersError) {
+        console.error('Error fetching customers:', customersError);
+        addConsoleMessage?.(`Error fetching customers: ${customersError.message}`);
+        return;
+      }
+
+      const customersList = (customers || []).map(c => ({
+        id: c.customer_id,
+        name: c.customer_name,
+        status: c.status
+      }));
+      setAdsCustomersList(customersList);
+
+      // Fetch all ads with customer_id through joins
+      const { data: ads, error: adsError } = await supabase
+        .from('ads')
+        .select(`
+          id,
+          name,
+          effective_status,
+          ad_set_id,
+          ad_sets(
+            campaign_id,
+            campaigns(
+              customer_id
+            )
+          )
+        `)
+        .order('name', { ascending: true });
+
+      if (adsError) {
+        console.error('Error fetching ads:', adsError);
+        addConsoleMessage?.(`Error fetching ads: ${adsError.message}`);
+        setAdsList([]);
+        return;
+      }
+
+      console.log('Raw ads data from Supabase:', ads);
+
+      const adsList = (ads || []).map((ad: any) => {
+        const customerId = ad.ad_sets?.campaigns?.customer_id || null;
+        return {
+          id: ad.id,
+          name: ad.name,
+          effective_status: ad.effective_status,
+          customer_id: customerId
+        };
+      });
+
+      console.log('Processed ads list:', adsList);
+      setAdsList(adsList);
+      addConsoleMessage?.(`Loaded ${adsList.length} ads and ${customersList.length} customers`);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      addConsoleMessage?.(`Error loading data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setAdsList([]);
+    }
+  };
+
+  const toggleAdSelection = (adId: string) => {
+    console.log('Toggle ad selection called for:', adId);
+    setSelectedAds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(adId)) {
+        console.log('Removing ad:', adId);
+        newSet.delete(adId);
+      } else {
+        console.log('Adding ad:', adId);
+        newSet.add(adId);
+      }
+      console.log('New selection set:', Array.from(newSet));
+      return newSet;
+    });
+  };
+
+  const selectAllAds = () => {
+    const filteredAds = selectedAdsCustomers.size > 0
+      ? adsList.filter(ad => selectedAdsCustomers.has(ad.customer_id))
+      : adsList;
+    const allAdIds = filteredAds.map(ad => ad.id);
+    setSelectedAds(new Set(allAdIds));
+    addConsoleMessage?.(`Selected all ${allAdIds.length} visible ads`);
+  };
+
+  const selectActiveAds = () => {
+    const filteredAds = selectedAdsCustomers.size > 0
+      ? adsList.filter(ad => selectedAdsCustomers.has(ad.customer_id))
+      : adsList;
+
+    const activeAdIds = filteredAds
+      .filter(ad => ad.effective_status === 'ACTIVE')
+      .map(ad => ad.id);
+    setSelectedAds(new Set(activeAdIds));
+    addConsoleMessage?.(`Selected ${activeAdIds.length} active ads`);
+  };
+
+  const handleFetchCreativesForSelectedAds = async () => {
+    if (selectedAds.size === 0) {
+      addConsoleMessage?.('Error: Please select at least one ad');
+      return;
+    }
+
+    setLoadingCreativesForAds(true);
+    setShowCreativesSelectionPopup(false);
+    addConsoleMessage?.(`Fetching creatives for ${selectedAds.size} selected ads...`);
+
+    try {
+      const adIds = Array.from(selectedAds);
+      const response = await fetch(`/api/get_ad_creatives?adIds=${adIds.join(',')}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Creatives fetch response:', data);
+      addConsoleMessage?.(`Creatives fetch completed: ${JSON.stringify(data, null, 2)}`);
+
+      await fetchTableData('ad_creatives');
+      addConsoleMessage?.('Ad creatives table refreshed after sync');
+    } catch (error) {
+      console.error('Error fetching creatives:', error);
+      addConsoleMessage?.(`Error fetching creatives: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingCreativesForAds(false);
+    }
+  };
+
+  const handleOpenCreativesAdsetSelection = async () => {
+    setShowCreativesAdsetSelectionPopup(true);
+
+    try {
+      // Fetch customers
+      const { data: customers, error: customersError } = await supabase
+        .from('Kunden')
+        .select('customer_id, customer_name, status')
+        .order('customer_name', { ascending: true });
+
+      if (customersError) {
+        console.error('Error fetching customers:', customersError);
+        addConsoleMessage?.(`Error fetching customers: ${customersError.message}`);
+        return;
+      }
+
+      const customersList = (customers || []).map(c => ({
+        id: c.customer_id,
+        name: c.customer_name,
+        status: c.status
+      }));
+      setCreativesCustomersList(customersList);
+
+      // Fetch all adsets with customer_id through campaigns join
+      const { data: adsets, error: adsetsError } = await supabase
+        .from('ad_sets')
+        .select(`
+          id,
+          name,
+          status,
+          campaign_id,
+          campaigns(
+            customer_id
+          )
+        `)
+        .order('name', { ascending: true });
+
+      if (adsetsError) {
+        console.error('Error fetching adsets:', adsetsError);
+        addConsoleMessage?.(`Error fetching adsets: ${adsetsError.message}`);
+        return;
+      }
+
+      console.log('Raw adsets data from Supabase:', adsets);
+
+      const adsetsList = (adsets || []).map((adset: any) => {
+        const customerId = adset.campaigns?.customer_id || null;
+        return {
+          id: adset.id,
+          name: adset.name,
+          status: adset.status,
+          customer_id: customerId
+        };
+      });
+
+      console.log('Processed adsets list:', adsetsList);
+      setCreativesAdsetsList(adsetsList);
+      addConsoleMessage?.(`Loaded ${adsetsList.length} adsets and ${customersList.length} customers`);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      addConsoleMessage?.(`Error loading data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const selectActiveCreativesAdsets = () => {
+    const filteredAdsets = selectedCreativesCustomers.size > 0
+      ? creativesAdsetsList.filter(adset => selectedCreativesCustomers.has(adset.customer_id))
+      : creativesAdsetsList;
+
+    const activeAdsetIds = filteredAdsets
+      .filter(adset => adset.status === 'ACTIVE')
+      .map(adset => adset.id);
+    setSelectedCreativesAdsets(new Set(activeAdsetIds));
+    addConsoleMessage?.(`Selected ${activeAdsetIds.length} active adsets`);
+  };
+
+  const handleFetchCreativesForSelectedAdsets = async () => {
+    if (selectedCreativesAdsets.size === 0) {
+      addConsoleMessage?.('Error: Please select at least one adset');
+      return;
+    }
+
+    setLoadingCreativesForAdsets(true);
+    setShowCreativesAdsetSelectionPopup(false);
+    addConsoleMessage?.(`Fetching creatives for ${selectedCreativesAdsets.size} selected adsets...`);
+
+    try {
+      const adsetIds = Array.from(selectedCreativesAdsets);
+      const response = await fetch(`/api/get_ad_creatives?adsetIds=${adsetIds.join(',')}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Creatives fetch response:', data);
+      addConsoleMessage?.(`Creatives fetch completed: ${JSON.stringify(data, null, 2)}`);
+
+      await fetchTableData('ad_creatives');
+      addConsoleMessage?.('Ad creatives table refreshed after sync');
+    } catch (error) {
+      console.error('Error fetching creatives:', error);
+      addConsoleMessage?.(`Error fetching creatives: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingCreativesForAdsets(false);
+    }
+  };
+
   const handleAbfrageCreatives = async (statusFilter: 'active' | 'all') => {
     setLoadingCreativesAbfrage(true);
     setShowCreativesStatusPopup(false);
@@ -662,7 +952,6 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       console.log('Netlify function response:', data);
       addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
 
-      // Refresh the ad_creatives table data after successful sync
       await fetchTableData('ad_creatives');
       addConsoleMessage?.('Ad creatives table refreshed after sync');
     } catch (error) {
@@ -1127,17 +1416,30 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                           {tableName === 'ad_creatives' && (
                             <>
                               <button
-                                onClick={() => setShowCreativesStatusPopup(true)}
-                                disabled={loadingCreativesAbfrage}
-                                className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
-                                title="Ad Creatives von Meta API abrufen"
+                                onClick={handleOpenCreativesAdsetSelection}
+                                disabled={loadingCreativesAbfrage || loadingCreativesForAdsets}
+                                className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 rounded transition-colors duration-150 disabled:opacity-50"
+                                title="Ad Creatives für ausgewählte Adsets abrufen"
                               >
-                                {loadingCreativesAbfrage ? (
+                                {(loadingCreativesAbfrage || loadingCreativesForAdsets) ? (
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b border-purple-700"></div>
+                                ) : (
+                                  <Search className="w-3 h-3" />
+                                )}
+                                <span>Abfrage (Adsets)</span>
+                              </button>
+                              <button
+                                onClick={handleOpenCreativesSelection}
+                                disabled={loadingCreativesAbfrage || loadingCreativesForAds}
+                                className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
+                                title="Ad Creatives für ausgewählte Ads abrufen"
+                              >
+                                {(loadingCreativesAbfrage || loadingCreativesForAds) ? (
                                   <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
                                 ) : (
                                   <Search className="w-3 h-3" />
                                 )}
-                                <span>Abfrage</span>
+                                <span>Abfrage (Ads)</span>
                               </button>
                               <button
                                 onClick={() => setShowCreativeImagesPopup(true)}
@@ -1322,59 +1624,501 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
         </>
       )}
 
-      {/* Ad Creatives Status Selection Popup */}
-      {showCreativesStatusPopup && (
+      {/* Ad Selection Popup for Creatives */}
+      {showCreativesSelectionPopup && (
         <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
-            onClick={() => setShowCreativesStatusPopup(false)}
-          />
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowCreativesSelectionPopup(false)}></div>
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl" style={{ backgroundColor: 'white' }} onClick={(e) => e.stopPropagation()}>
+              <div className="p-6" style={{ backgroundColor: 'white' }}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Kunden und Ads auswählen
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Wählen Sie Kunden auf der linken Seite aus, um ihre Ads auf der rechten Seite zu sehen.
+                </p>
 
-          {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div
-              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 min-w-64 max-h-60 overflow-y-auto"
-              style={{ backgroundColor: 'white' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-2" style={{ backgroundColor: 'white' }}>
-                <button
-                  onClick={() => handleAbfrageCreatives('all')}
-                  disabled={loadingCreativesAbfrage}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
-                  style={{ backgroundColor: 'white' }}
-                >
-                  <div className="w-4 h-4 flex items-center justify-center">
-                    {loadingCreativesAbfrage ? (
-                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
-                    ) : null}
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  {/* Left Column - Customers */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Kunden</h4>
+
+                    {/* Customer Quick Selection */}
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <button
+                        onClick={() => {
+                          setSelectedAdsCustomers(new Set(adsCustomersList.map(c => c.id)));
+                          addConsoleMessage?.(`Selected all ${adsCustomersList.length} customers`);
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Alle
+                      </button>
+                      <button
+                        onClick={() => {
+                          const activeCustomerIds = adsCustomersList
+                            .filter(customer => customer.status === 'Aktiv')
+                            .map(customer => customer.id);
+                          setSelectedAdsCustomers(new Set(activeCustomerIds));
+                          addConsoleMessage?.(`Selected ${activeCustomerIds.length} active customers`);
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Nur Aktive
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedAdsCustomers(new Set());
+                          addConsoleMessage?.('Reset customer selection');
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Zurücksetzen
+                      </button>
+                    </div>
+
+                    {/* Customer List */}
+                    <div className="border border-gray-300 rounded-lg max-h-96 overflow-y-auto">
+                      {adsCustomersList.length === 0 ? (
+                        <div className="p-4 text-center text-gray-500">
+                          Keine Kunden gefunden
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-200">
+                          {adsCustomersList.map((customer) => (
+                            <button
+                              type="button"
+                              key={customer.id}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const newSelection = new Set(selectedAdsCustomers);
+                                if (newSelection.has(customer.id)) {
+                                  newSelection.delete(customer.id);
+                                } else {
+                                  newSelection.add(customer.id);
+                                }
+                                setSelectedAdsCustomers(newSelection);
+                              }}
+                              className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors duration-150 text-left"
+                            >
+                              <div className="flex items-center space-x-2 flex-1">
+                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-150 ${
+                                  selectedAdsCustomers.has(customer.id)
+                                    ? 'bg-blue-600 border-blue-600'
+                                    : 'border-gray-300'
+                                }`}>
+                                  {selectedAdsCustomers.has(customer.id) && (
+                                    <Check className="w-2.5 h-2.5 text-white" />
+                                  )}
+                                </div>
+                                <div className="text-sm font-medium text-gray-900">{customer.name}</div>
+                              </div>
+                              {customer.status && (
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  customer.status === 'Aktiv'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {customer.status}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800">
+                        <strong>{selectedAdsCustomers.size}</strong> Kunde{selectedAdsCustomers.size !== 1 ? 'n' : ''} ausgewählt
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-gray-900">Alle Ads</span>
-                </button>
-                <button
-                  onClick={() => handleAbfrageCreatives('active')}
-                  disabled={loadingCreativesAbfrage}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
-                  style={{ backgroundColor: 'white' }}
-                >
-                  <div className="w-4 h-4 flex items-center justify-center">
-                    {loadingCreativesAbfrage ? (
-                      <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-700"></div>
-                    ) : null}
+
+                  {/* Right Column - Ads */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Ads</h4>
+
+                    {/* Ad Quick Selection */}
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <button
+                        onClick={selectAllAds}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Alle
+                      </button>
+                      <button
+                        onClick={selectActiveAds}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Nur Aktive
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedAds(new Set());
+                          addConsoleMessage?.('Reset ads selection');
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Zurücksetzen
+                      </button>
+                    </div>
+
+                    {/* Ad List */}
+                    <div className="border border-gray-300 rounded-lg max-h-96 overflow-y-auto">
+                      {(() => {
+                        const filteredAds = selectedAdsCustomers.size > 0
+                          ? adsList.filter(ad => ad.customer_id && selectedAdsCustomers.has(ad.customer_id))
+                          : adsList;
+
+                        if (adsList.length === 0) {
+                          return (
+                            <div className="p-4 text-center text-gray-500">
+                              Keine Ads gefunden
+                            </div>
+                          );
+                        }
+
+                        if (filteredAds.length === 0 && selectedAdsCustomers.size > 0) {
+                          return (
+                            <div className="p-4 text-center text-gray-500">
+                              Keine Ads für ausgewählte Kunden gefunden
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="divide-y divide-gray-200">
+                            {filteredAds.map((ad) => (
+                              <button
+                                type="button"
+                                key={ad.id}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Ad clicked:', ad.id);
+                                  toggleAdSelection(ad.id);
+                                }}
+                                className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors duration-150 text-left"
+                              >
+                                <div className="flex items-center space-x-2 flex-1">
+                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-150 ${
+                                    selectedAds.has(ad.id)
+                                      ? 'bg-blue-600 border-blue-600'
+                                      : 'border-gray-300'
+                                  }`}>
+                                    {selectedAds.has(ad.id) && (
+                                      <Check className="w-2.5 h-2.5 text-white" />
+                                    )}
+                                  </div>
+                                  <div className="text-sm font-medium text-gray-900">{ad.name}</div>
+                                </div>
+                                {ad.effective_status && (
+                                  <span className={`text-xs px-2 py-0.5 rounded ${
+                                    ad.effective_status === 'ACTIVE'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {ad.effective_status}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800">
+                        <strong>{selectedAds.size}</strong> Ad{selectedAds.size !== 1 ? 's' : ''} ausgewählt
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-gray-900">Nur aktive Ads</span>
-                </button>
-                <div className="border-t border-gray-100 my-1"></div>
-                <button
-                  onClick={() => setShowCreativesStatusPopup(false)}
-                  disabled={loadingCreativesAbfrage}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-900 bg-white hover:bg-gray-100 rounded flex items-center space-x-2 transition-colors duration-150"
-                  style={{ backgroundColor: 'white' }}
-                >
-                  <div className="w-4 h-4 flex items-center justify-center"></div>
-                  <span className="text-gray-900">Abbrechen</span>
-                </button>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowCreativesSelectionPopup(false)}
+                    disabled={loadingCreativesForAds}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={handleFetchCreativesForSelectedAds}
+                    disabled={selectedAds.size === 0 || loadingCreativesForAds}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    {loadingCreativesForAds ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Lädt...</span>
+                      </>
+                    ) : (
+                      <span>Creatives abrufen</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Creatives Adset Selection Popup */}
+      {showCreativesAdsetSelectionPopup && (
+        <>
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowCreativesAdsetSelectionPopup(false)}></div>
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl" style={{ backgroundColor: 'white' }} onClick={(e) => e.stopPropagation()}>
+              <div className="p-6" style={{ backgroundColor: 'white' }}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Kunden und Adsets auswählen
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Wählen Sie Kunden auf der linken Seite aus, um ihre Adsets auf der rechten Seite zu sehen.
+                </p>
+
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  {/* Left Column - Customers */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Kunden</h4>
+
+                    {/* Customer Quick Selection */}
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <button
+                        onClick={() => {
+                          setSelectedCreativesCustomers(new Set(creativesCustomersList.map(c => c.id)));
+                          addConsoleMessage?.(`Selected all ${creativesCustomersList.length} customers`);
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Alle
+                      </button>
+                      <button
+                        onClick={() => {
+                          const activeCustomerIds = creativesCustomersList
+                            .filter(customer => customer.status === 'Aktiv')
+                            .map(customer => customer.id);
+                          setSelectedCreativesCustomers(new Set(activeCustomerIds));
+                          addConsoleMessage?.(`Selected ${activeCustomerIds.length} active customers`);
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Nur Aktive
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedCreativesCustomers(new Set());
+                          addConsoleMessage?.('Reset customer selection');
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Zurücksetzen
+                      </button>
+                    </div>
+
+                    {/* Customer List */}
+                    <div className="border border-gray-300 rounded-lg max-h-96 overflow-y-auto">
+                      {creativesCustomersList.length === 0 ? (
+                        <div className="p-4 text-center text-gray-500">
+                          Keine Kunden gefunden
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-200">
+                          {creativesCustomersList.map((customer) => (
+                            <button
+                              type="button"
+                              key={customer.id}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const newSelection = new Set(selectedCreativesCustomers);
+                                if (newSelection.has(customer.id)) {
+                                  newSelection.delete(customer.id);
+                                } else {
+                                  newSelection.add(customer.id);
+                                }
+                                setSelectedCreativesCustomers(newSelection);
+                              }}
+                              className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors duration-150 text-left"
+                            >
+                              <div className="flex items-center space-x-2 flex-1">
+                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-150 ${
+                                  selectedCreativesCustomers.has(customer.id)
+                                    ? 'bg-blue-600 border-blue-600'
+                                    : 'border-gray-300'
+                                }`}>
+                                  {selectedCreativesCustomers.has(customer.id) && (
+                                    <Check className="w-2.5 h-2.5 text-white" />
+                                  )}
+                                </div>
+                                <div className="text-sm font-medium text-gray-900">{customer.name}</div>
+                              </div>
+                              {customer.status && (
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  customer.status === 'Aktiv'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {customer.status}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800">
+                        <strong>{selectedCreativesCustomers.size}</strong> Kunde{selectedCreativesCustomers.size !== 1 ? 'n' : ''} ausgewählt
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Adsets */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Adsets</h4>
+
+                    {/* Adset Quick Selection */}
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <button
+                        onClick={() => {
+                          const filteredAdsets = selectedCreativesCustomers.size > 0
+                            ? creativesAdsetsList.filter(adset => selectedCreativesCustomers.has(adset.customer_id))
+                            : creativesAdsetsList;
+                          setSelectedCreativesAdsets(new Set(filteredAdsets.map(a => a.id)));
+                          addConsoleMessage?.(`Selected all ${filteredAdsets.length} visible adsets`);
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Alle
+                      </button>
+                      <button
+                        onClick={selectActiveCreativesAdsets}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Nur Aktive
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedCreativesAdsets(new Set());
+                          addConsoleMessage?.('Reset adsets selection');
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-xs"
+                      >
+                        Zurücksetzen
+                      </button>
+                    </div>
+
+                    {/* Adset List */}
+                    <div className="border border-gray-300 rounded-lg max-h-96 overflow-y-auto">
+                      {(() => {
+                        const filteredAdsets = selectedCreativesCustomers.size > 0
+                          ? creativesAdsetsList.filter(adset => adset.customer_id && selectedCreativesCustomers.has(adset.customer_id))
+                          : creativesAdsetsList;
+
+                        if (creativesAdsetsList.length === 0) {
+                          return (
+                            <div className="p-4 text-center text-gray-500">
+                              Keine Adsets gefunden
+                            </div>
+                          );
+                        }
+
+                        if (filteredAdsets.length === 0 && selectedCreativesCustomers.size > 0) {
+                          return (
+                            <div className="p-4 text-center text-gray-500">
+                              Keine Adsets für ausgewählte Kunden gefunden
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="divide-y divide-gray-200">
+                            {filteredAdsets.map((adset) => (
+                              <button
+                                type="button"
+                                key={adset.id}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const newSelection = new Set(selectedCreativesAdsets);
+                                  if (newSelection.has(adset.id)) {
+                                    newSelection.delete(adset.id);
+                                  } else {
+                                    newSelection.add(adset.id);
+                                  }
+                                  setSelectedCreativesAdsets(newSelection);
+                                }}
+                                className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors duration-150 text-left"
+                              >
+                                <div className="flex items-center space-x-2 flex-1">
+                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-150 ${
+                                    selectedCreativesAdsets.has(adset.id)
+                                      ? 'bg-purple-600 border-purple-600'
+                                      : 'border-gray-300'
+                                  }`}>
+                                    {selectedCreativesAdsets.has(adset.id) && (
+                                      <Check className="w-2.5 h-2.5 text-white" />
+                                    )}
+                                  </div>
+                                  <div className="text-sm font-medium text-gray-900">{adset.name}</div>
+                                </div>
+                                {adset.status && (
+                                  <span className={`text-xs px-2 py-0.5 rounded ${
+                                    adset.status === 'ACTIVE'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {adset.status}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded-lg">
+                      <p className="text-xs text-purple-800">
+                        <strong>{selectedCreativesAdsets.size}</strong> Adset{selectedCreativesAdsets.size !== 1 ? 's' : ''} ausgewählt
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowCreativesAdsetSelectionPopup(false)}
+                    disabled={loadingCreativesForAdsets}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={handleFetchCreativesForSelectedAdsets}
+                    disabled={selectedCreativesAdsets.size === 0 || loadingCreativesForAdsets}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    {loadingCreativesForAdsets ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Lädt...</span>
+                      </>
+                    ) : (
+                      <span>Creatives abrufen</span>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

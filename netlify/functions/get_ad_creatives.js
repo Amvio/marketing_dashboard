@@ -74,17 +74,35 @@ exports.handler = async (event, context) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    // Get status filter from query parameters
+    // Get query parameters
     const queryParams = event.queryStringParameters || {};
     const statusFilter = queryParams.statusFilter; // 'active' or null for all
+    const adIds = queryParams.adIds
+      ? queryParams.adIds.split(',').map(id => id.trim())
+      : null;
+    const adsetIds = queryParams.adsetIds
+      ? queryParams.adsetIds.split(',').map(id => id.trim())
+      : null;
 
-    // Step 1: Get ad IDs and names from Supabase based on status filter
+    // Step 1: Get ad IDs and names from Supabase
     console.log('Fetching ad IDs and names from Supabase ads table...');
 
     let adsQuery = supabase
       .from('ads')
-      .select('id, name, creative_id')
+      .select('id, name, creative_id, ad_set_id')
       .order('id', { ascending: true });
+
+    // Apply adset filter if specified (takes priority)
+    if (adsetIds && adsetIds.length > 0) {
+      console.log(`Filtering for ${adsetIds.length} selected adsets...`);
+      adsQuery = adsQuery.in('ad_set_id', adsetIds);
+    }
+
+    // Apply ad IDs filter if specified (in addition to adset filter)
+    if (adIds && adIds.length > 0) {
+      console.log(`Further filtering for ${adIds.length} selected ads...`);
+      adsQuery = adsQuery.in('id', adIds);
+    }
 
     // Apply status filter if specified
     if (statusFilter === 'active') {
@@ -109,6 +127,12 @@ exports.handler = async (event, context) => {
     }
 
     console.log(`Found ${(adsData || []).length} ads in Supabase${statusFilter === 'active' ? ' (active only)' : ''}`);
+    if (adsetIds && adsetIds.length > 0) {
+      console.log(`Filtered by ${adsetIds.length} adsets`);
+    }
+    if (adIds && adIds.length > 0) {
+      console.log(`Filtered by ${adIds.length} specific ads`);
+    }
 
     // Create a map of creative_id to ad name for later use
     const creativeToAdNameMap = new Map();
@@ -119,9 +143,9 @@ exports.handler = async (event, context) => {
     });
     console.log(`Created mapping for ${creativeToAdNameMap.size} creatives to ad names`);
 
-    // Get unique ad IDs
-    const uniqueAdIds = [...new Set((adsData || []).map(ad => ad.id).filter(Boolean))];
-    console.log(`Found ${uniqueAdIds.length} unique ad IDs`);
+    // Get unique creative IDs
+    const uniqueCreativeIds = [...new Set((adsData || []).map(ad => ad.creative_id).filter(Boolean))];
+    console.log(`Found ${uniqueCreativeIds.length} unique creative IDs`);
 
     // Helper function to safely get nested property
     const safeGet = (obj, path, defaultValue = null) => {
@@ -150,37 +174,33 @@ exports.handler = async (event, context) => {
       }
     };
 
-    // Step 2: Get creative for each ad using Meta Graph API
+    // Step 2: Get creative data directly using Meta Graph API
     let creativesData = [];
 
-    for (const adId of uniqueAdIds) {
-      const adUrl = `https://graph.facebook.com/v19.0/${adId}`;
-      const adParams = new URLSearchParams({
+    for (const creativeId of uniqueCreativeIds) {
+      const creativeUrl = `https://graph.facebook.com/v19.0/${creativeId}`;
+      const creativeParams = new URLSearchParams({
         access_token: accessToken,
-        fields: 'creative{id,name,object_story_spec,asset_feed_spec,created_time,updated_time}',
+        fields: 'id,name,object_story_spec,asset_feed_spec,created_time,updated_time',
       });
 
       try {
-        console.log(`Fetching creative for ad ${adId}...`);
+        console.log(`Fetching creative ${creativeId}...`);
 
-        const adResponse = await fetch(`${adUrl}?${adParams.toString()}`, {
+        const creativeResponse = await fetch(`${creativeUrl}?${creativeParams.toString()}`, {
           method: 'GET',
           headers: { 'Accept': 'application/json' },
         });
 
-        if (adResponse.ok) {
-          const adResult = await adResponse.json();
-          if (adResult.creative) {
-            creativesData.push(adResult.creative);
-            console.log(`Successfully fetched creative ${adResult.creative.id} for ad ${adId}`);
-          } else {
-            console.log(`No creative found for ad ${adId}`);
-          }
+        if (creativeResponse.ok) {
+          const creativeResult = await creativeResponse.json();
+          creativesData.push(creativeResult);
+          console.log(`Successfully fetched creative ${creativeResult.id}`);
         } else {
-          console.error(`Error response from Meta API for ad ${adId}:`, adResponse.status, adResponse.statusText);
+          console.error(`Error response from Meta API for creative ${creativeId}:`, creativeResponse.status, creativeResponse.statusText);
         }
       } catch (error) {
-        console.error(`Error fetching creative for ad ${adId}:`, error);
+        console.error(`Error fetching creative ${creativeId}:`, error);
       }
     }
 
@@ -370,6 +390,10 @@ exports.handler = async (event, context) => {
         source: 'Meta Graph API',
         timestamp: new Date().toISOString(),
         statusFilter: statusFilter || 'all',
+        adIds: adIds || 'all',
+        adsetIds: adsetIds || 'all',
+        selectedAdCount: adIds ? adIds.length : 'all',
+        selectedAdsetCount: adsetIds ? adsetIds.length : 'all',
         totalCount: uniqueCreatives.length,
         supabaseSync: {
           processed: upsertResults.processed,
