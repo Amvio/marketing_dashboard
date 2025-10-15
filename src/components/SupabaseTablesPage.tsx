@@ -41,6 +41,12 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
   const [customersList, setCustomersList] = useState<any[]>([]);
   const [loadingLeadsForCustomers, setLoadingLeadsForCustomers] = useState(false);
+  const [showAdsSelectionPopup, setShowAdsSelectionPopup] = useState(false);
+  const [selectedAdsets, setSelectedAdsets] = useState<Set<string>>(new Set());
+  const [adsetsList, setAdsetsList] = useState<any[]>([]);
+  const [loadingAdsForAdsets, setLoadingAdsForAdsets] = useState(false);
+  const [selectedInsightsAdsets, setSelectedInsightsAdsets] = useState<Set<string>>(new Set());
+  const [insightsAdsetsList, setInsightsAdsetsList] = useState<any[]>([]);
 
   // Standalone handler for ad_accounts Abfrage
   const handleAbfrageAdAccounts = async () => {
@@ -174,12 +180,115 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     }
   };
 
-  // Standalone handler for ads Abfrage
+  const handleOpenAdsSelection = async () => {
+    setShowAdsSelectionPopup(true);
+
+    try {
+      const { data: adsets, error } = await supabase
+        .from('ad_sets')
+        .select('id, name, status')
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching adsets:', error);
+        addConsoleMessage?.(`Error fetching adsets: ${error.message}`);
+        setAdsetsList([]);
+        return;
+      }
+
+      console.log('Adsets loaded:', adsets);
+      setAdsetsList(adsets || []);
+      addConsoleMessage?.(`Loaded ${adsets?.length || 0} adsets`);
+    } catch (error) {
+      console.error('Error loading adsets:', error);
+      addConsoleMessage?.(`Error loading adsets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setAdsetsList([]);
+    }
+  };
+
+  const toggleAdsetSelection = (adsetId: string) => {
+    console.log('Toggle adset selection called for:', adsetId);
+    setSelectedAdsets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(adsetId)) {
+        console.log('Removing adset:', adsetId);
+        newSet.delete(adsetId);
+      } else {
+        console.log('Adding adset:', adsetId);
+        newSet.add(adsetId);
+      }
+      console.log('New selection set:', Array.from(newSet));
+      return newSet;
+    });
+  };
+
+  const selectAllAdsets = () => {
+    const allAdsetIds = adsetsList.map(adset => adset.id);
+    setSelectedAdsets(new Set(allAdsetIds));
+    addConsoleMessage?.(`Selected all ${allAdsetIds.length} adsets`);
+  };
+
+  const selectActiveAdsets = () => {
+    const activeAdsetIds = adsetsList
+      .filter(adset => adset.status === 'ACTIVE')
+      .map(adset => adset.id);
+    setSelectedAdsets(new Set(activeAdsetIds));
+    addConsoleMessage?.(`Selected ${activeAdsetIds.length} active adsets`);
+  };
+
+  const handleFetchAdsForSelectedAdsets = async () => {
+    if (selectedAdsets.size === 0) {
+      addConsoleMessage?.('Error: Please select at least one adset');
+      return;
+    }
+
+    setLoadingAdsForAdsets(true);
+    setShowAdsSelectionPopup(false);
+    addConsoleMessage?.(`Fetching ads for ${selectedAdsets.size} selected adsets...`);
+
+    try {
+      const adsetIds = Array.from(selectedAdsets);
+      const response = await fetch(`/api/get_ads?adsetIds=${adsetIds.join(',')}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Netlify function error:', errorText);
+        addConsoleMessage?.(`Netlify function error: ${errorText}`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
+        addConsoleMessage?.(`Non-JSON response: ${responseText}`);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('Ads fetch response:', data);
+      addConsoleMessage?.(`Ads fetch completed: ${JSON.stringify(data, null, 2)}`);
+
+      await fetchTableData('ads');
+      addConsoleMessage?.('Ads table refreshed after sync');
+    } catch (error) {
+      console.error('Error fetching ads:', error);
+      addConsoleMessage?.(`Error fetching ads: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoadingAdsForAdsets(false);
+    }
+  };
+
   const handleAbfrageAds = async (statusFilter: 'active' | 'all') => {
     setLoadingAdsAbfrage(true);
     setShowAdsetStatusPopup(false);
     addConsoleMessage?.(`Calling Netlify function for ads with status filter: ${statusFilter}...`);
-    
+
     try {
       console.log(`Calling Netlify function for ads with status filter: ${statusFilter}...`);
       const response = await fetch(`/api/get_ads${statusFilter === 'active' ? '?statusFilter=active' : ''}`, {
@@ -188,7 +297,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Netlify function error:', errorText);
@@ -207,8 +316,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       const data = await response.json();
       console.log('Netlify function response:', data);
       addConsoleMessage?.(`Netlify function response received: ${JSON.stringify(data, null, 2)}`);
-      
-      // Refresh the ads table data after successful sync
+
       await fetchTableData('ads');
       addConsoleMessage?.('Ads table refreshed after sync');
     } catch (error) {
@@ -564,6 +672,36 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     }
   };
 
+  const toggleInsightsAdsetSelection = (adsetId: string) => {
+    console.log('Toggle insights adset selection called for:', adsetId);
+    setSelectedInsightsAdsets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(adsetId)) {
+        console.log('Removing adset:', adsetId);
+        newSet.delete(adsetId);
+      } else {
+        console.log('Adding adset:', adsetId);
+        newSet.add(adsetId);
+      }
+      console.log('New selection set:', Array.from(newSet));
+      return newSet;
+    });
+  };
+
+  const selectAllInsightsAdsets = () => {
+    const allAdsetIds = insightsAdsetsList.map(adset => adset.id);
+    setSelectedInsightsAdsets(new Set(allAdsetIds));
+    addConsoleMessage?.(`Selected all ${allAdsetIds.length} adsets for insights`);
+  };
+
+  const selectActiveInsightsAdsets = () => {
+    const activeAdsetIds = insightsAdsetsList
+      .filter(adset => adset.status === 'ACTIVE')
+      .map(adset => adset.id);
+    setSelectedInsightsAdsets(new Set(activeAdsetIds));
+    addConsoleMessage?.(`Selected ${activeAdsetIds.length} active adsets for insights`);
+  };
+
   const initializeInsightsDates = async () => {
     setLoadingInsightsDateInit(true);
     addConsoleMessage?.('Initializing insights date range...');
@@ -596,6 +734,21 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
       setInsightsStartDate(defaultStartDate);
       setInsightsEndDate(defaultEndDate);
       addConsoleMessage?.(`Date range initialized: ${defaultStartDate} to ${defaultEndDate}`);
+
+      const { data: adsets, error: adsetsError } = await supabase
+        .from('ad_sets')
+        .select('id, name, status')
+        .order('name', { ascending: true });
+
+      if (adsetsError) {
+        console.error('Error fetching adsets:', adsetsError);
+        addConsoleMessage?.(`Error fetching adsets: ${adsetsError.message}`);
+        setInsightsAdsetsList([]);
+      } else {
+        console.log('Insights adsets loaded:', adsets);
+        setInsightsAdsetsList(adsets || []);
+        addConsoleMessage?.(`Loaded ${adsets?.length || 0} adsets for insights`);
+      }
     } catch (error) {
       console.error('Error initializing dates:', error);
       addConsoleMessage?.(`Error initializing dates: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -624,12 +777,26 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
 
     setLoadingInsightsAbfrage(true);
     setShowInsightsStatusPopup(false);
-    addConsoleMessage?.(`Fetching insights from ${insightsStartDate} to ${insightsEndDate} (${insightsStatusFilter})...`);
+
+    const filterParts = [];
+    if (selectedInsightsAdsets.size > 0) {
+      filterParts.push(`${selectedInsightsAdsets.size} adsets`);
+    }
+    if (insightsStatusFilter === 'active') {
+      filterParts.push('active');
+    }
+    const filterDesc = filterParts.length > 0 ? ` (${filterParts.join(', ')})` : '';
+
+    addConsoleMessage?.(`Fetching insights from ${insightsStartDate} to ${insightsEndDate}${filterDesc}...`);
 
     try {
       const statusParam = insightsStatusFilter === 'active' ? '&statusFilter=active' : '';
+      const adsetIdsParam = selectedInsightsAdsets.size > 0
+        ? `&adsetIds=${Array.from(selectedInsightsAdsets).join(',')}`
+        : '';
+
       const response = await fetch(
-        `/api/get_ad_insights?startDate=${insightsStartDate}&endDate=${insightsEndDate}${statusParam}`,
+        `/api/get_ad_insights?startDate=${insightsStartDate}&endDate=${insightsEndDate}${statusParam}${adsetIdsParam}`,
         {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
@@ -935,12 +1102,12 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                           )}
                           {tableName === 'ads' && (
                             <button
-                              onClick={() => setShowAdsetStatusPopup(true)}
-                              disabled={loadingAdsAbfrage}
+                              onClick={handleOpenAdsSelection}
+                              disabled={loadingAdsAbfrage || loadingAdsForAdsets}
                               className="ml-2 flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors duration-150 disabled:opacity-50"
                               title="Ads von Meta API abrufen"
                             >
-                              {loadingAdsAbfrage ? (
+                              {(loadingAdsAbfrage || loadingAdsForAdsets) ? (
                                 <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-700"></div>
                               ) : (
                                 <Search className="w-3 h-3" />
@@ -1260,7 +1427,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
         </>
       )}
 
-      {/* Ad Insights Date Range Picker Popup */}
+      {/* Ad Insights Date Range Picker Popup with Adset Selection */}
       {showInsightsStatusPopup && (
         <>
           {/* Backdrop */}
@@ -1272,13 +1439,13 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div
-              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 w-full max-w-md"
+              className="bg-white border border-gray-300 rounded-lg shadow-xl z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
               style={{ backgroundColor: 'white' }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6" style={{ backgroundColor: 'white' }}>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Ad Insights Zeitraum wählen
+                  Ad Insights Zeitraum und Adsets wählen
                 </h3>
 
                 {loadingInsightsDateInit ? (
@@ -1288,30 +1455,32 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div>
-                      <label htmlFor="insights-start-date" className="block text-sm font-medium text-gray-700 mb-2">
-                        Startdatum
-                      </label>
-                      <input
-                        id="insights-start-date"
-                        type="date"
-                        value={insightsStartDate}
-                        onChange={(e) => setInsightsStartDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="insights-start-date" className="block text-sm font-medium text-gray-700 mb-2">
+                          Startdatum
+                        </label>
+                        <input
+                          id="insights-start-date"
+                          type="date"
+                          value={insightsStartDate}
+                          onChange={(e) => setInsightsStartDate(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
 
-                    <div>
-                      <label htmlFor="insights-end-date" className="block text-sm font-medium text-gray-700 mb-2">
-                        Enddatum
-                      </label>
-                      <input
-                        id="insights-end-date"
-                        type="date"
-                        value={insightsEndDate}
-                        onChange={(e) => setInsightsEndDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                      <div>
+                        <label htmlFor="insights-end-date" className="block text-sm font-medium text-gray-700 mb-2">
+                          Enddatum
+                        </label>
+                        <input
+                          id="insights-end-date"
+                          type="date"
+                          value={insightsEndDate}
+                          onChange={(e) => setInsightsEndDate(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -1344,6 +1513,95 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                           <span>Nur aktive Ads</span>
                         </button>
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Adsets auswählen (optional)
+                      </label>
+                      <p className="text-xs text-gray-500 mb-2">
+                        Leer lassen für alle Adsets
+                      </p>
+
+                      {/* Quick Selection Buttons */}
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          type="button"
+                          onClick={selectAllInsightsAdsets}
+                          className="flex-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-sm"
+                        >
+                          Alle
+                        </button>
+                        <button
+                          type="button"
+                          onClick={selectActiveInsightsAdsets}
+                          className="flex-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-sm"
+                        >
+                          Nur Aktive
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedInsightsAdsets(new Set())}
+                          className="flex-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-sm"
+                        >
+                          Zurücksetzen
+                        </button>
+                      </div>
+
+                      {/* Adset Selection List */}
+                      <div className="border border-gray-300 rounded-lg max-h-60 overflow-y-auto">
+                        {insightsAdsetsList.length === 0 ? (
+                          <div className="p-4 text-center text-gray-500 text-sm">
+                            Keine Adsets gefunden
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-gray-200">
+                            {insightsAdsetsList.map((adset) => (
+                              <button
+                                type="button"
+                                key={adset.id}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleInsightsAdsetSelection(adset.id);
+                                }}
+                                className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-gray-50 transition-colors duration-150 text-left"
+                              >
+                                <div className="flex items-center space-x-3 flex-1">
+                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-150 ${
+                                    selectedInsightsAdsets.has(adset.id)
+                                      ? 'bg-blue-600 border-blue-600'
+                                      : 'border-gray-300'
+                                  }`}>
+                                    {selectedInsightsAdsets.has(adset.id) && (
+                                      <Check className="w-2.5 h-2.5 text-white" />
+                                    )}
+                                  </div>
+                                  <div className="text-sm font-medium text-gray-900">{adset.name}</div>
+                                </div>
+                                {adset.status && (
+                                  <span className={`text-xs px-2 py-0.5 rounded ${
+                                    adset.status === 'ACTIVE'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {adset.status}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Selection Summary */}
+                      {selectedInsightsAdsets.size > 0 && (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-800">
+                            <strong>{selectedInsightsAdsets.size}</strong> Adset{selectedInsightsAdsets.size !== 1 ? 's' : ''} ausgewählt
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {insightsStartDate && insightsEndDate && new Date(insightsStartDate) > new Date(insightsEndDate) && (
@@ -1477,6 +1735,120 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                   <button
                     onClick={() => setShowLeadsSelectionPopup(false)}
                     disabled={loadingLeadsForCustomers}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Adset Selection Popup for Ads */}
+      {showAdsSelectionPopup && (
+        <>
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowAdsSelectionPopup(false)}></div>
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg" style={{ backgroundColor: 'white' }} onClick={(e) => e.stopPropagation()}>
+              <div className="p-6" style={{ backgroundColor: 'white' }}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Adsets auswählen
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Wählen Sie die Adsets aus, für die Sie Ads abrufen möchten.
+                </p>
+
+                {/* Quick Selection Buttons */}
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={selectAllAdsets}
+                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-sm"
+                  >
+                    Alle
+                  </button>
+                  <button
+                    onClick={selectActiveAdsets}
+                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors duration-150 font-medium text-sm"
+                  >
+                    Nur Aktive
+                  </button>
+                </div>
+
+                {/* Adset Selection List */}
+                <div className="border border-gray-300 rounded-lg max-h-96 overflow-y-auto mb-4">
+                  {adsetsList.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      Keine Adsets gefunden
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-200">
+                      {adsetsList.map((adset) => (
+                        <button
+                          type="button"
+                          key={adset.id}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Adset clicked:', adset.id);
+                            toggleAdsetSelection(adset.id);
+                          }}
+                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors duration-150 text-left"
+                        >
+                          <div className="flex items-center space-x-3 flex-1">
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors duration-150 ${
+                              selectedAdsets.has(adset.id)
+                                ? 'bg-blue-600 border-blue-600'
+                                : 'border-gray-300'
+                            }`}>
+                              {selectedAdsets.has(adset.id) && (
+                                <Check className="w-3 h-3 text-white" />
+                              )}
+                            </div>
+                            <div className="font-medium text-gray-900">{adset.name}</div>
+                          </div>
+                          {adset.status && (
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              adset.status === 'ACTIVE'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {adset.status}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Selection Summary */}
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>{selectedAdsets.size}</strong> Adset{selectedAdsets.size !== 1 ? 's' : ''} ausgewählt
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleFetchAdsForSelectedAdsets}
+                    disabled={selectedAdsets.size === 0 || loadingAdsForAdsets}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    {loadingAdsForAdsets ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Lädt...</span>
+                      </>
+                    ) : (
+                      <span>Ads abrufen</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowAdsSelectionPopup(false)}
+                    disabled={loadingAdsForAdsets}
                     className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Abbrechen

@@ -210,8 +210,7 @@ export const getLeadMetricsForPeriod = (
   leadTableCampaigns: LeadTableCampaign[],
   startDate: Date,
   endDate: Date,
-  selectedCustomer: Customer | null,
-  selectedCampaignIds: string[]
+  selectedCustomer: Customer | null
 ) => {
   const startDateString = formatDateString(startDate);
   const endDateString = formatDateString(endDate);
@@ -226,15 +225,11 @@ export const getLeadMetricsForPeriod = (
     const leadDate = lead.created_time.split('T')[0];
     const isInDateRange = leadDate >= startDateString && leadDate <= endDateString;
 
-    let matchesHierarchy = true;
+    const matchesCustomer = selectedCustomer
+      ? customerCampaignIds.includes(lead.campaign_id)
+      : true;
 
-    if (selectedCampaignIds.length > 0) {
-      matchesHierarchy = selectedCampaignIds.includes(lead.campaign_id);
-    } else if (selectedCustomer) {
-      matchesHierarchy = customerCampaignIds.includes(lead.campaign_id);
-    }
-
-    return isInDateRange && matchesHierarchy;
+    return isInDateRange && matchesCustomer;
   });
 
   const totalLeads = filteredLeads.length;
@@ -257,8 +252,7 @@ export const getDailyLeadCounts = (
   leadTableLeads: LeadTableLead[],
   leadTableCampaigns: LeadTableCampaign[],
   dateRange: string[],
-  selectedCustomer: Customer | null,
-  selectedCampaignIds: string[]
+  selectedCustomer: Customer | null
 ) => {
   const customerCampaignIds = leadTableCampaigns
     .filter(c => selectedCustomer ? c.customer_id === selectedCustomer.customer_id : true)
@@ -273,15 +267,11 @@ export const getDailyLeadCounts = (
 
       if (!isSameDay) return false;
 
-      let matchesHierarchy = true;
+      const matchesCustomer = selectedCustomer
+        ? customerCampaignIds.includes(lead.campaign_id)
+        : true;
 
-      if (selectedCampaignIds.length > 0) {
-        matchesHierarchy = selectedCampaignIds.includes(lead.campaign_id);
-      } else if (selectedCustomer) {
-        matchesHierarchy = customerCampaignIds.includes(lead.campaign_id);
-      }
-
-      return matchesHierarchy;
+      return matchesCustomer;
     });
 
     const totalLeads = dayLeads.length;

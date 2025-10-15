@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { supabase } from './lib/supabase';
+import { supabase, fetchAllPages } from './lib/supabase';
 import { Navbar } from './components/Navbar';
 import { Header } from './components/Header';
 import { SupabaseTablesPage } from './components/SupabaseTablesPage';
@@ -165,7 +165,7 @@ function App() {
       value: currentMetrics.clicks,
       previousValue: previousMetrics.clicks,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-secondary-blue',
+      color: 'bg-primary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 2
     },
@@ -175,7 +175,7 @@ function App() {
       value: Math.round(currentMetrics.ctr * 100) / 100,
       previousValue: Math.round(previousMetrics.ctr * 100) / 100,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-secondary-blue',
+      color: 'bg-primary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 5
     },
@@ -195,7 +195,7 @@ function App() {
       value: Math.round(currentMetrics.spend * 100) / 100,
       previousValue: Math.round(previousMetrics.spend * 100) / 100,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-tertiary-blue',
+      color: 'bg-primary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 3
     },
@@ -206,7 +206,7 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-primary-blue',
+      color: 'bg-tertiary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 9
     },
@@ -216,7 +216,7 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-secondary-blue',
+      color: 'bg-tertiary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 10
     },
@@ -226,7 +226,7 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-secondary-blue',
+      color: 'bg-tertiary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 13
     },
@@ -236,7 +236,7 @@ function App() {
       value: 0,
       previousValue: 0,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-primary-blue',
+      color: 'bg-tertiary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 12
     },
@@ -267,7 +267,7 @@ function App() {
       value: Math.round(currentMetrics.cpm * 100) / 100,
       previousValue: Math.round(previousMetrics.cpm * 100) / 100,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-tertiary-blue',
+      color: 'bg-primary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 6
     },
@@ -277,7 +277,7 @@ function App() {
       value: Math.round(currentMetrics.cpc * 100) / 100,
       previousValue: Math.round(previousMetrics.cpc * 100) / 100,
       chartData: dailyDateRange.map(() => 0),
-      color: 'bg-secondary-blue',
+      color: 'bg-primary-blue',
       icon: <Eye className="w-4 h-4" />,
       libraryId: 8
     }
@@ -321,19 +321,11 @@ function App() {
     const fetchCampaigns = async () => {
       setLoadingCampaigns(true);
       setErrorCampaigns(null);
-      
-      try {
-        const { data, error } = await supabase
-          .from('campaigns')
-          .select('*')
-          .order('created_time', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching campaigns:', error);
-          setErrorCampaigns(error.message);
-        } else {
-          setSupabaseCampaigns(data || []);
-        }
+      try {
+        console.log('Fetching campaigns with pagination...');
+        const data = await fetchAllPages<Campaign>('campaigns', '*', 'created_time', false);
+        setSupabaseCampaigns(data || []);
       } catch (err) {
         console.error('Exception fetching campaigns:', err);
         setErrorCampaigns(err instanceof Error ? err.message : 'Unknown error');
@@ -350,19 +342,11 @@ function App() {
     const fetchAdsets = async () => {
       setLoadingAdsets(true);
       setErrorAdsets(null);
-      
-      try {
-        const { data, error } = await supabase
-          .from('ad_sets')
-          .select('*')
-          .order('created_time', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching adsets:', error);
-          setErrorAdsets(error.message);
-        } else {
-          setSupabaseAdsets(data || []);
-        }
+      try {
+        console.log('Fetching adsets with pagination...');
+        const data = await fetchAllPages<Adset>('ad_sets', '*', 'created_time', false);
+        setSupabaseAdsets(data || []);
       } catch (err) {
         console.error('Exception fetching adsets:', err);
         setErrorAdsets(err instanceof Error ? err.message : 'Unknown error');
@@ -379,19 +363,11 @@ function App() {
     const fetchAds = async () => {
       setLoadingAds(true);
       setErrorAds(null);
-      
-      try {
-        const { data, error } = await supabase
-          .from('ads')
-          .select('*')
-          .order('created_time', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching ads:', error);
-          setErrorAds(error.message);
-        } else {
-          setSupabaseAds(data || []);
-        }
+      try {
+        console.log('Fetching ads with pagination...');
+        const data = await fetchAllPages<Ad>('ads', '*', 'created_time', false);
+        setSupabaseAds(data || []);
       } catch (err) {
         console.error('Exception fetching ads:', err);
         setErrorAds(err instanceof Error ? err.message : 'Unknown error');
@@ -408,23 +384,13 @@ function App() {
     const fetchAdInsights = async () => {
       setLoadingInsights(true);
       setErrorInsights(null);
-      
+
       try {
-        console.log('Fetching ad insights from ad_insights table...');
-        const { data, error } = await supabase
-          .from('ad_insights')
-          .select('*')
-          .order('date', { ascending: false });
+        console.log('Fetching ad insights with pagination...');
+        const data = await fetchAllPages<AdInsight>('ad_insights', '*', 'date', false);
 
         console.log('Ad insights data:', data);
-        console.log('Ad insights error:', error);
-
-        if (error) {
-          console.error('Error fetching ad insights:', error);
-          setErrorInsights(error.message);
-        } else {
-          setAdInsights(data || []);
-        }
+        setAdInsights(data || []);
       } catch (err) {
         console.error('Exception fetching ad insights:', err);
         setErrorInsights(err instanceof Error ? err.message : 'Unknown error');
@@ -476,21 +442,11 @@ function App() {
       setErrorLeadCampaigns(null);
 
       try {
-        console.log('Fetching leadtable_campaigns...');
-        const { data, error } = await supabase
-          .from('leadtable_campaigns')
-          .select('*')
-          .order('created_at', { ascending: false });
+        console.log('Fetching leadtable_campaigns with pagination...');
+        const data = await fetchAllPages<LeadTableCampaign>('leadtable_campaigns', '*', 'created_at', false);
 
         console.log('LeadTable campaigns data:', data);
-        console.log('LeadTable campaigns error:', error);
-
-        if (error) {
-          console.error('Error fetching leadtable_campaigns:', error);
-          setErrorLeadCampaigns(error.message);
-        } else {
-          setLeadTableCampaigns(data || []);
-        }
+        setLeadTableCampaigns(data || []);
       } catch (err) {
         console.error('Exception fetching leadtable_campaigns:', err);
         setErrorLeadCampaigns(err instanceof Error ? err.message : 'Unknown error');
@@ -509,21 +465,11 @@ function App() {
       setErrorLeads(null);
 
       try {
-        console.log('Fetching leadtable_leads...');
-        const { data, error } = await supabase
-          .from('leadtable_leads')
-          .select('*')
-          .order('created_time', { ascending: false });
+        console.log('Fetching leadtable_leads with pagination...');
+        const data = await fetchAllPages<LeadTableLead>('leadtable_leads', '*', 'created_time', false);
 
         console.log('LeadTable leads data:', data);
-        console.log('LeadTable leads error:', error);
-
-        if (error) {
-          console.error('Error fetching leadtable_leads:', error);
-          setErrorLeads(error.message);
-        } else {
-          setLeadTableLeads(data || []);
-        }
+        setLeadTableLeads(data || []);
       } catch (err) {
         console.error('Exception fetching leadtable_leads:', err);
         setErrorLeads(err instanceof Error ? err.message : 'Unknown error');
@@ -628,8 +574,7 @@ function App() {
       leadTableCampaigns,
       startDate,
       endDate,
-      selectedCustomer,
-      selectedCampaignIds
+      selectedCustomer
     );
 
     const previousLeadMetrics = getLeadMetricsForPeriod(
@@ -637,8 +582,7 @@ function App() {
       leadTableCampaigns,
       updatedPreviousPeriodRange.startDate,
       updatedPreviousPeriodRange.endDate,
-      selectedCustomer,
-      selectedCampaignIds
+      selectedCustomer
     );
 
     // Get daily lead counts
@@ -646,8 +590,7 @@ function App() {
       leadTableLeads,
       leadTableCampaigns,
       updatedDailyDateRange,
-      selectedCustomer,
-      selectedCampaignIds
+      selectedCustomer
     );
 
     // Calculate conversion rate (leads / clicks * 100)
@@ -705,7 +648,7 @@ function App() {
         value: updatedCurrentMetrics.clicks,
         previousValue: updatedPreviousMetrics.clicks,
         chartData: dailyChartData.map(d => d.clicks),
-        color: 'bg-secondary-blue',
+        color: 'bg-primary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 2
       },
@@ -715,7 +658,7 @@ function App() {
         value: Math.round(updatedCurrentMetrics.ctr * 100) / 100,
         previousValue: Math.round(updatedPreviousMetrics.ctr * 100) / 100,
         chartData: dailyChartData.map(d => Math.round(d.ctr * 100) / 100),
-        color: 'bg-secondary-blue',
+        color: 'bg-primary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 5
       },
@@ -735,7 +678,7 @@ function App() {
         value: Math.round(updatedCurrentMetrics.spend * 100) / 100,
         previousValue: Math.round(updatedPreviousMetrics.spend * 100) / 100,
         chartData: dailyChartData.map(d => Math.round(d.spend * 100) / 100),
-        color: 'bg-tertiary-blue',
+        color: 'bg-primary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 3
       },
@@ -746,7 +689,7 @@ function App() {
         value: currentLeadMetrics.totalLeads,
         previousValue: previousLeadMetrics.totalLeads,
         chartData: dailyLeadData.map(d => d.totalLeads),
-        color: 'bg-primary-blue',
+        color: 'bg-tertiary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 9
       },
@@ -756,7 +699,7 @@ function App() {
         value: currentLeadMetrics.qualifiedLeads,
         previousValue: previousLeadMetrics.qualifiedLeads,
         chartData: dailyLeadData.map(d => d.qualifiedLeads),
-        color: 'bg-secondary-blue',
+        color: 'bg-tertiary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 10
       },
@@ -766,7 +709,7 @@ function App() {
         value: Math.round(currentLeadMetrics.leadQuality * 100) / 100,
         previousValue: Math.round(previousLeadMetrics.leadQuality * 100) / 100,
         chartData: dailyLeadData.map(d => Math.round(d.leadQuality * 100) / 100),
-        color: 'bg-secondary-blue',
+        color: 'bg-tertiary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 13
       },
@@ -776,7 +719,7 @@ function App() {
         value: Math.round(currentConversionRate * 100) / 100,
         previousValue: Math.round(previousConversionRate * 100) / 100,
         chartData: dailyConversionRates.map(d => Math.round(d * 100) / 100),
-        color: 'bg-primary-blue',
+        color: 'bg-tertiary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 12
       },
@@ -807,7 +750,7 @@ function App() {
         value: Math.round(updatedCurrentMetrics.cpm * 100) / 100,
         previousValue: Math.round(updatedPreviousMetrics.cpm * 100) / 100,
         chartData: dailyChartData.map(d => Math.round(d.cpm * 100) / 100),
-        color: 'bg-tertiary-blue',
+        color: 'bg-primary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 6
       },
@@ -817,7 +760,7 @@ function App() {
         value: Math.round(updatedCurrentMetrics.cpc * 100) / 100,
         previousValue: Math.round(updatedPreviousMetrics.cpc * 100) / 100,
         chartData: dailyChartData.map(d => Math.round(d.cpc * 100) / 100),
-        color: 'bg-secondary-blue',
+        color: 'bg-primary-blue',
         icon: <Eye className="w-4 h-4" />,
         libraryId: 8
       }

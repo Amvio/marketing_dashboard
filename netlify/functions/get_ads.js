@@ -34,10 +34,10 @@ exports.handler = async (event, context) => {
 
   try {
     console.log('Fetching ads from Meta Graph API...');
-    
+
     // Get Meta Graph API access token from environment variables
     const accessToken = process.env.META_GRAPH_API_ACCESS_TOKEN;
-    
+
     if (!accessToken) {
       console.error('META_GRAPH_API_ACCESS_TOKEN not found in environment variables');
       return {
@@ -56,7 +56,7 @@ exports.handler = async (event, context) => {
     // Initialize Supabase client for server-side operations
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
     if (!supabaseUrl || !supabaseServiceRoleKey) {
       console.error('Supabase configuration missing');
       return {
@@ -74,42 +74,75 @@ exports.handler = async (event, context) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    // Get status filter from query parameters
+    // Get query parameters
     const queryParams = event.queryStringParameters || {};
-    const statusFilter = queryParams.statusFilter; // 'active' or null for all
+    const statusFilter = queryParams.statusFilter;
+    const adsetIds = queryParams.adsetIds
+      ? queryParams.adsetIds.split(',').map(id => id.trim())
+      : null;
 
-    // Step 1: Get adset IDs from Supabase based on status filter
-    console.log('Fetching adset IDs from Supabase ad_sets table...');
-    
-    let adsetsQuery = supabase
-      .from('ad_sets')
-      .select('id')
-      .order('id', { ascending: true });
+    // Step 1: Get adset IDs from Supabase
+    let adsetsData;
 
-    // Apply status filter if specified
-    if (statusFilter === 'active') {
-      adsetsQuery = adsetsQuery.eq('status', 'ACTIVE');
+    if (adsetIds && adsetIds.length > 0) {
+      console.log(`Fetching ads for ${adsetIds.length} selected adsets...`);
+
+      const { data, error: adsetsError } = await supabase
+        .from('ad_sets')
+        .select('id')
+        .in('id', adsetIds)
+        .order('id', { ascending: true });
+
+      if (adsetsError) {
+        console.error('Error fetching adsets from Supabase:', adsetsError);
+        return {
+          statusCode: 500,
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            error: 'Supabase Error',
+            message: `Failed to fetch adsets from Supabase: ${adsetsError.message}`,
+          }),
+        };
+      }
+
+      adsetsData = data;
+      console.log(`Found ${(adsetsData || []).length} matching adsets in Supabase`);
+    } else {
+      console.log('Fetching adset IDs from Supabase ad_sets table...');
+
+      let adsetsQuery = supabase
+        .from('ad_sets')
+        .select('id')
+        .order('id', { ascending: true });
+
+      if (statusFilter === 'active') {
+        adsetsQuery = adsetsQuery.eq('status', 'ACTIVE');
+      }
+
+      const { data, error: adsetsError } = await adsetsQuery;
+
+      if (adsetsError) {
+        console.error('Error fetching adsets from Supabase:', adsetsError);
+        return {
+          statusCode: 500,
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            error: 'Supabase Error',
+            message: `Failed to fetch adsets from Supabase: ${adsetsError.message}`,
+          }),
+        };
+      }
+
+      adsetsData = data;
+      console.log(`Found ${(adsetsData || []).length} adsets in Supabase${statusFilter === 'active' ? ' (active only)' : ''}`);
     }
 
-    const { data: adsetsData, error: adsetsError } = await adsetsQuery;
-
-    if (adsetsError) {
-      console.error('Error fetching adsets from Supabase:', adsetsError);
-      return {
-        statusCode: 500,
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          error: 'Supabase Error',
-          message: `Failed to fetch adsets from Supabase: ${adsetsError.message}`,
-        }),
-      };
-    }
-
-    console.log(`Found ${(adsetsData || []).length} adsets in Supabase${statusFilter === 'active' ? ' (active only)' : ''}`);
-    
     // Step 2: Get all ads for each adset
     let adsData = [];
     
@@ -210,6 +243,8 @@ exports.handler = async (event, context) => {
         source: 'Meta Graph API',
         timestamp: new Date().toISOString(),
         statusFilter: statusFilter || 'all',
+        adsetIds: adsetIds || 'all',
+        selectedAdsetCount: adsetIds ? adsetIds.length : 'all',
         totalCount: adsData.length,
         supabaseSync: {
           processed: upsertResults.processed,

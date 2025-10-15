@@ -112,6 +112,9 @@ exports.handler = async (event, context) => {
     const endDate = queryParams.endDate;
     const statusFilter = queryParams.statusFilter;
     const jobId = queryParams.jobId;
+    const adsetIds = queryParams.adsetIds
+      ? queryParams.adsetIds.split(',').map(id => id.trim())
+      : null;
 
     if (!startDate || !endDate) {
       console.error('Missing required date parameters');
@@ -150,8 +153,13 @@ exports.handler = async (event, context) => {
 
     let adsQuery = supabase
       .from('ads')
-      .select('id')
+      .select('id, ad_set_id')
       .order('id', { ascending: true });
+
+    if (adsetIds && adsetIds.length > 0) {
+      console.log(`Filtering ads for ${adsetIds.length} selected adsets...`);
+      adsQuery = adsQuery.in('ad_set_id', adsetIds);
+    }
 
     if (statusFilter === 'active') {
       adsQuery = adsQuery.eq('effective_status', 'ACTIVE');
@@ -174,7 +182,16 @@ exports.handler = async (event, context) => {
       };
     }
 
-    console.log(`Found ${(adsData || []).length} ads in Supabase${statusFilter === 'active' ? ' (active only)' : ''}`);
+    const filterDescription = [];
+    if (adsetIds && adsetIds.length > 0) {
+      filterDescription.push(`${adsetIds.length} selected adsets`);
+    }
+    if (statusFilter === 'active') {
+      filterDescription.push('active only');
+    }
+    const filterText = filterDescription.length > 0 ? ` (${filterDescription.join(', ')})` : '';
+
+    console.log(`Found ${(adsData || []).length} ads in Supabase${filterText}`);
 
     if (!adsData || adsData.length === 0) {
       return {
@@ -188,6 +205,8 @@ exports.handler = async (event, context) => {
           source: 'Meta Graph API',
           timestamp: new Date().toISOString(),
           dateRange: { startDate, endDate },
+          adsetIds: adsetIds || 'all',
+          selectedAdsetCount: adsetIds ? adsetIds.length : 'all',
           totalCount: 0,
           supabaseSync: {
             processed: 0,
@@ -363,6 +382,8 @@ exports.handler = async (event, context) => {
         source: 'Meta Graph API',
         timestamp: new Date().toISOString(),
         dateRange: { startDate, endDate },
+        adsetIds: adsetIds || 'all',
+        selectedAdsetCount: adsetIds ? adsetIds.length : 'all',
         totalCount: allInsightsData.length,
         adsQueried: adsProcessed,
         totalAds: adsData.length,
