@@ -47,6 +47,7 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
   const [loadingAdsForAdsets, setLoadingAdsForAdsets] = useState(false);
   const [selectedInsightsAdsets, setSelectedInsightsAdsets] = useState<Set<string>>(new Set());
   const [insightsAdsetsList, setInsightsAdsetsList] = useState<any[]>([]);
+  const [showInactiveInsightsAdsets, setShowInactiveInsightsAdsets] = useState(false);
 
   // Standalone handler for ad_accounts Abfrage
   const handleAbfrageAdAccounts = async () => {
@@ -688,8 +689,16 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
     });
   };
 
+  const getFilteredInsightsAdsets = () => {
+    if (showInactiveInsightsAdsets) {
+      return insightsAdsetsList;
+    }
+    return insightsAdsetsList.filter(adset => adset.status === 'ACTIVE');
+  };
+
   const selectAllInsightsAdsets = () => {
-    const allAdsetIds = insightsAdsetsList.map(adset => adset.id);
+    const filteredAdsets = getFilteredInsightsAdsets();
+    const allAdsetIds = filteredAdsets.map(adset => adset.id);
     setSelectedInsightsAdsets(new Set(allAdsetIds));
     addConsoleMessage?.(`Selected all ${allAdsetIds.length} adsets for insights`);
   };
@@ -1548,15 +1557,26 @@ export const SupabaseTablesPage: React.FC<SupabaseTablesPageProps> = ({ onBack, 
                         </button>
                       </div>
 
+                      {/* Show Inactive Toggle Button */}
+                      <div className="mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowInactiveInsightsAdsets(!showInactiveInsightsAdsets)}
+                          className="w-full px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors duration-150 font-medium text-sm border border-gray-200"
+                        >
+                          {showInactiveInsightsAdsets ? 'Nur Aktive anzeigen' : 'Zeige Inaktive'}
+                        </button>
+                      </div>
+
                       {/* Adset Selection List */}
                       <div className="border border-gray-300 rounded-lg max-h-60 overflow-y-auto">
-                        {insightsAdsetsList.length === 0 ? (
+                        {getFilteredInsightsAdsets().length === 0 ? (
                           <div className="p-4 text-center text-gray-500 text-sm">
                             Keine Adsets gefunden
                           </div>
                         ) : (
                           <div className="divide-y divide-gray-200">
-                            {insightsAdsetsList.map((adset) => (
+                            {getFilteredInsightsAdsets().map((adset) => (
                               <button
                                 type="button"
                                 key={adset.id}
